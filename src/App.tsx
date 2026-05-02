@@ -34,11 +34,13 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { MudInputs, CalculationResults } from './types';
 import { calculateMudParameters } from './utils/calculations';
+import TrajectoryVisualization from './components/TrajectoryVisualization';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 type InputsState = {
-  [K in keyof MudInputs]: MudInputs[K] extends boolean ? boolean : string;
+  [K in keyof MudInputs]: MudInputs[K] extends boolean ? boolean : 
+                         K extends 'surveyPoints' ? Array<{ md: string, inclination: string, azimuth: string }> : string;
 };
 
 const InputField = ({ 
@@ -92,6 +94,7 @@ const InputGroup = ({
         {id === 'components' && <Database size={18} className="text-amber-500" />}
         {id === 'properties' && <Settings size={18} className="text-emerald-500" />}
         {id === 'polymers' && <Info size={18} className="text-purple-500" />}
+        {id === 'trajectory' && <TrendingUp size={18} className="text-red-500" />}
         {title}
       </span>
       {expandedSection === id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
@@ -111,37 +114,108 @@ const InputGroup = ({
   </div>
 );
 
+const STORAGE_KEY = 'bentomud_pro_state';
+
+const DEFAULT_INTERVAL: InputsState = {
+  prevCasingInternalDiameter: '245',
+  nextCasingInternalDiameter: '178',
+  bitDiameter: '215.9',
+  washoutCoefficient: '1.15',
+  bentoniteConcentration: '25',
+  weightingAgentConcentration: '0',
+  marbleConcentration: '15',
+  weightingAgentDensity: '4.2',
+  bentoniteColloidalContent: '85',
+  rockPorosity: '20',
+  cuttingContentOfSection: '10',
+  dispersionMediumDensity: '1.0',
+  isWeighted: false,
+  filterCakeThickness: '0.8',
+  intervalStart: '0',
+  intervalEnd: '500',
+  unweightedDensity: '1.10',
+  weightedDensity: '1.15',
+  cleaningStages: '4',
+  mudVolumeInTanks: '150',
+  prevIntervalVolume: '0',
+  lpPolymerConcentration: '5',
+  hpPolymerConcentration: '2',
+  xcPolymerConcentration: '1',
+  inclinationStart: '0',
+  inclinationEnd: '0',
+  azimuthStart: '0',
+  azimuthEnd: '0',
+  surveyPoints: []
+};
+
 export default function App() {
-  const [inputs, setInputs] = useState<InputsState>({
-    prevCasingInternalDiameter: '245',
-    nextCasingInternalDiameter: '178',
-    bitDiameter: '215.9',
-    washoutCoefficient: '1.15',
-    bentoniteConcentration: '25',
-    weightingAgentConcentration: '0',
-    marbleConcentration: '15',
-    weightingAgentDensity: '4.2',
-    bentoniteColloidalContent: '85',
-    rockPorosity: '20',
-    cuttingContentOfSection: '10',
-    dispersionMediumDensity: '1.0',
-    isWeighted: false,
-    filterCakeThickness: '0.8',
-    intervalStart: '0',
-    intervalEnd: '500',
-    unweightedDensity: '1.10',
-    weightedDensity: '1.15',
-    cleaningStages: '4',
-    mudVolumeInTanks: '150',
-    prevIntervalVolume: '0',
-    lpPolymerConcentration: '5',
-    hpPolymerConcentration: '2',
-    xcPolymerConcentration: '1'
+  const [intervals, setIntervals] = useState<InputsState[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.intervals && Array.isArray(parsed.intervals)) return parsed.intervals;
+      } catch (e) { console.error(e); }
+    }
+    return [DEFAULT_INTERVAL];
   });
 
-  const [activeTab, setActiveTab] = useState<'inputs' | 'results' | 'charts'>('inputs');
-  const [expandedSection, setExpandedSection] = useState<string | null>('geometry');
-  const [hiddenRows, setHiddenRows] = useState<Set<string>>(new Set());
+  const [activeIntervalIndex, setActiveIntervalIndex] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.activeIntervalIndex === 'number') return parsed.activeIntervalIndex;
+      } catch (e) { console.error(e); }
+    }
+    return 0;
+  });
+
+  const [activeTab, setActiveTab] = useState<'inputs' | 'results' | 'charts' | 'summary'>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (['inputs', 'results', 'charts', 'summary'].includes(parsed.activeTab)) return parsed.activeTab;
+      } catch (e) { console.error(e); }
+    }
+    return 'inputs';
+  });
+
+  const [expandedSection, setExpandedSection] = useState<string | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.expandedSection !== undefined ? parsed.expandedSection : 'geometry';
+      } catch (e) { console.error(e); }
+    }
+    return 'geometry';
+  });
+
+  const [hiddenRows, setHiddenRows] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.hiddenRows)) return new Set(parsed.hiddenRows);
+      } catch (e) { console.error(e); }
+    }
+    return new Set();
+  });
+
+  // Persist state to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      intervals,
+      activeIntervalIndex,
+      activeTab,
+      expandedSection,
+      hiddenRows: Array.from(hiddenRows)
+    }));
+  }, [intervals, activeIntervalIndex, activeTab, expandedSection, hiddenRows]);
+
+  const inputs = intervals[activeIntervalIndex] || intervals[0];
 
   const toggleRow = (id: string) => {
     setHiddenRows(prev => {
@@ -152,42 +226,85 @@ export default function App() {
     });
   };
 
-  const restoreTable = (tableId: string) => {
-    setHiddenRows(prev => {
-      const next = new Set<string>(prev);
-      const itemsToDelete = Array.from(next).filter((item: string) => item.startsWith(tableId + '_'));
-      itemsToDelete.forEach(item => next.delete(item));
+  const handleInputChange = (name: keyof MudInputs, value: string | boolean) => {
+    setIntervals(prev => {
+      const next = [...prev];
+      next[activeIntervalIndex] = {
+        ...next[activeIntervalIndex],
+        [name]: value
+      };
       return next;
     });
   };
 
-  const restoreAll = () => setHiddenRows(new Set<string>());
-
-  const hasHiddenRows = hiddenRows.size > 0;
-  const hasHiddenInTable = (tableId: string) => Array.from(hiddenRows).some((id: string) => id.startsWith(tableId + '_'));
-
-  const handleInputChange = (name: keyof MudInputs, value: string | boolean) => {
-    setInputs(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  const addInterval = () => {
+    const lastInterval = intervals[intervals.length - 1];
+    const lastResults = calculateMudParameters(parseSingleInputs(lastInterval));
+    
+    const newInterval: InputsState = {
+      ...lastInterval,
+      intervalStart: lastInterval.intervalEnd,
+      intervalEnd: (parseFloat(lastInterval.intervalEnd) + 500).toString(),
+      prevIntervalVolume: lastResults.Vper.toFixed(2),
+    };
+    
+    setIntervals([...intervals, newInterval]);
+    setActiveIntervalIndex(intervals.length);
+    setActiveTab('inputs');
   };
 
-  const parsedInputs = useMemo(() => {
-    const result = { ...inputs } as any;
-    for (const key in inputs) {
-      if (typeof inputs[key as keyof MudInputs] === 'string') {
-        // Replace comma with dot for parsing
-        const val = (inputs[key as keyof MudInputs] as string).replace(',', '.');
+  const removeInterval = (index: number) => {
+    if (intervals.length <= 1) return;
+    const nextIntervals = intervals.filter((_, i) => i !== index);
+    setIntervals(nextIntervals);
+    setActiveIntervalIndex(Math.max(0, index - 1));
+  };
+
+  function parseSingleInputs(input: InputsState): MudInputs {
+    const result = { ...input } as any;
+    for (const key in input) {
+      if (key === 'surveyPoints') {
+        result[key] = (input[key] as any[]).map(p => ({
+          md: parseFloat(p.md.replace(',', '.')) || 0,
+          inclination: parseFloat(p.inclination.replace(',', '.')) || 0,
+          azimuth: parseFloat(p.azimuth.replace(',', '.')) || 0
+        }));
+      } else if (typeof input[key as keyof MudInputs] === 'string') {
+        const val = (input[key as keyof MudInputs] as string).replace(',', '.');
         result[key] = parseFloat(val) || 0;
       }
     }
     return result as MudInputs;
-  }, [inputs]);
+  }
 
-  const results = useMemo(() => calculateMudParameters(parsedInputs), [parsedInputs]);
+  const allResults = useMemo(() => {
+    return intervals.map(interval => calculateMudParameters(parseSingleInputs(interval)));
+  }, [intervals]);
 
-  // Automatic calculation of weightingAgentConcentration
+  const results = allResults[activeIntervalIndex] || allResults[0];
+  const parsedInputs = useMemo(() => parseSingleInputs(inputs), [inputs]);
+
+  // Handle cross-interval volume synchronization
+  useEffect(() => {
+    setIntervals(prev => {
+      let changed = false;
+      const next = [...prev];
+      
+      for (let i = 1; i < next.length; i++) {
+        const prevResults = calculateMudParameters(parseSingleInputs(next[i-1]));
+        const expectedVper = prevResults.Vper.toFixed(2);
+        
+        if (next[i].prevIntervalVolume !== expectedVper) {
+          next[i] = { ...next[i], prevIntervalVolume: expectedVper };
+          changed = true;
+        }
+      }
+      
+      return changed ? next : prev;
+    });
+  }, [allResults]);
+
+  // Automatic calculation of weightingAgentConcentration for active interval
   useEffect(() => {
     if (inputs.isWeighted) {
       const d = parseFloat(inputs.unweightedDensity.replace(',', '.'));
@@ -196,23 +313,17 @@ export default function App() {
       
       if (!isNaN(d) && !isNaN(du) && !isNaN(put) && put > du && du > d) {
         const constant_01_6 = 0.06;
-        // ucu is addition per 1 m3 of base mud
         const ucu = 1000 * put * (du - d) * (1 - constant_01_6) / (put - du * (1 - constant_01_6 + constant_01_6 * put));
-        // vc is resulting volume from 1 m3 base
         const vc = 1 + (ucu * 0.001 / put);
-        // icu is concentration in the final volume (kg/m3)
         const icu = ucu / vc;
         
         const icuStr = icu.toFixed(2);
         if (inputs.weightingAgentConcentration !== icuStr) {
-          setInputs(prev => ({
-            ...prev,
-            weightingAgentConcentration: icuStr
-          }));
+          handleInputChange('weightingAgentConcentration', icuStr);
         }
       }
     }
-  }, [inputs.isWeighted, inputs.unweightedDensity, inputs.weightedDensity, inputs.weightingAgentDensity]);
+  }, [inputs.isWeighted, inputs.unweightedDensity, inputs.weightedDensity, inputs.weightingAgentDensity, activeIntervalIndex]);
 
   const mudCompositionData = useMemo(() => [
     { name: 'Коллоидяа фаза', value: Math.abs(results.ccol) },
@@ -235,6 +346,20 @@ export default function App() {
     { name: 'Водная фаза', value: results.WaterSlurry }
   ];
 
+  const restoreTable = (tableId: string) => {
+    setHiddenRows(prev => {
+      const next = new Set<string>(prev);
+      const itemsToDelete = Array.from(next).filter((item: string) => item.startsWith(tableId + '_'));
+      itemsToDelete.forEach(item => next.delete(item));
+      return next;
+    });
+  };
+
+  const restoreAll = () => setHiddenRows(new Set<string>());
+
+  const hasHiddenRows = hiddenRows.size > 0;
+  const hasHiddenInTable = (tableId: string) => Array.from(hiddenRows).some((id: string) => id.startsWith(tableId + '_'));
+
   const handleToggleSection = (id: string) => {
     setExpandedSection(expandedSection === id ? null : id);
   };
@@ -242,52 +367,208 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-            <Calculator size={24} strokeWidth={2.5} />
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+              <Calculator size={24} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h1 className="font-bold text-xl tracking-tight leading-none">BentoMud Pro</h1>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1.5">Multi-Interval Engineering System</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-xl tracking-tight">BentoMud</h1>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">Проектирование бурового раствора</p>
+          
+          <div className="flex flex-col gap-3">
+            <nav className="flex bg-slate-100 p-1 rounded-xl self-end">
+              {(['inputs', 'results', 'charts', 'summary'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${
+                    activeTab === tab 
+                      ? 'bg-white text-blue-600 shadow-sm translate-y-[-1px]' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {tab === 'inputs' ? 'Параметры' : tab === 'results' ? 'Результат' : tab === 'charts' ? 'Графики' : 'Итоговая сводка'}
+                </button>
+              ))}
+            </nav>
+
+            {/* Interval Selection Strip */}
+            {activeTab !== 'summary' && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar self-end">
+                {intervals.map((_, idx) => (
+                  <div key={idx} className="flex relative group">
+                    <button
+                      onClick={() => setActiveIntervalIndex(idx)}
+                      className={`whitespace-nowrap px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter border-2 transition-all ${
+                        activeIntervalIndex === idx
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-105'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-blue-400'
+                      }`}
+                    >
+                      Инт. {idx + 1}
+                    </button>
+                    {intervals.length > 1 && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); removeInterval(idx); }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
+                      >
+                        <XCircle size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={addInterval}
+                  className="whitespace-nowrap px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter border-2 border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-1.5 bg-white bg-opacity-50"
+                >
+                  <RefreshCcw size={10} className="rotate-45" />
+                  Добавить интервал?
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        
-        <nav className="flex bg-slate-100 p-1 rounded-xl">
-          {(['inputs', 'results', 'charts'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-2 rounded-lg text-sm font-bold capitalize transition-all ${
-                activeTab === tab 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {tab === 'inputs' ? 'Ввод данных' : tab === 'results' ? 'Результаты' : 'Диаграммы'}
-            </button>
-          ))}
-        </nav>
-
-        <button className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all">
-          <Download size={18} />
-          Экспорт PDF
-        </button>
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
         <AnimatePresence mode="wait">
+          {activeTab === 'summary' && (
+            <motion.div
+              key="summary"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="flex flex-col gap-10"
+            >
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-slate-900 pb-8">
+                <div>
+                  <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase mb-2">Итоговая сводка</h2>
+                  <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-xs">Аналитика по всем интервалам бурения</p>
+                </div>
+                <div className="flex gap-4">
+                  <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 leading-none">Всего интервалов</p>
+                    <p className="text-2xl font-black">{intervals.length}</p>
+                  </div>
+                  <div className="bg-blue-600 text-white p-4 rounded-2xl shadow-xl">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-200 mb-1 leading-none">Общий объем приготовленного</p>
+                    <p className="text-2xl font-black">{allResults.reduce((acc, r) => acc + r.Vp, 0).toFixed(1)} м³</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3D Visualization */}
+              <TrajectoryVisualization 
+                intervals={intervals.map(inv => parseSingleInputs(inv))} 
+              />
+
+              {/* Summary Table Set */}
+              <div className="grid grid-cols-1 gap-12">
+                {[
+                  { 
+                    title: 'Фазовый состав раствора', 
+                    icon: <Database className="text-blue-500" />,
+                    rows: [
+                      { label: 'Общая тв. фаза (%)', key: 'octf' },
+                      { label: 'Коллоидная фаза (%)', key: 'ccol' },
+                      { label: 'Конц. шлама (%)', key: 'cshp' },
+                      { label: 'Конц. бентонита (кг/м³)', key: 'cbent' },
+                      { label: 'Конц. кольматанта (кг/м³)', key: 'kolm' },
+                      { label: 'Конц. утяжелителя (кг/м³)', key: 'icup_kg' }
+                    ]
+                  },
+                  { 
+                    title: 'Баланс объемов', 
+                    icon: <Maximize2 className="text-amber-500" />,
+                    rows: [
+                      { label: 'Объем скважины (м³)', key: 'Vkon' },
+                      { label: 'Объем приготовленного (м³)', key: 'Vp' },
+                      { label: 'Потери на фильтрацию (м³)', key: 'Ff' },
+                      { label: 'Потери на очистке (м³)', key: 'Fs' },
+                      { label: 'Общие потери (м³)', key: 'F' },
+                      { label: 'К переводу на след. (м³)', key: 'Vper' }
+                    ]
+                  },
+                  { 
+                    title: 'Фазовый состав шлама', 
+                    icon: <TrendingUp className="text-emerald-500" />,
+                    rows: [
+                      { label: 'Горная порода (%)', key: 'Csh' },
+                      { label: 'Твердая фаза раствора (%)', key: 'Cr' },
+                      { label: 'Водная фаза (%)', key: 'WaterSlurry' }
+                    ]
+                  }
+                ].map((table, tIdx) => (
+                  <div key={tIdx} className="bg-white border border-slate-200 rounded-[30px] overflow-hidden shadow-sm">
+                    <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+                      {table.icon}
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">{table.title}</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50/50">
+                            <th className="px-8 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 min-w-[250px]">Показатель</th>
+                            {intervals.map((_, iIdx) => (
+                              <th key={iIdx} className="px-8 py-4 text-center text-[10px] font-black uppercase tracking-widest text-blue-600 border-b border-slate-100 min-w-[150px]">
+                                Интервал {iIdx + 1}
+                                <span className="block text-[8px] text-slate-400 font-medium mt-1">{intervals[iIdx].intervalStart}-{intervals[iIdx].intervalEnd} м</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 italic font-medium">
+                          {table.rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors group">
+                              <td className="px-8 py-4 text-sm text-slate-600 font-bold group-hover:text-slate-900 transition-colors uppercase tracking-tight leading-none">{row.label}</td>
+                              {allResults.map((res, iIdx) => {
+                                let val: any = res[row.key as keyof CalculationResults];
+                                if (row.key === 'icup_kg') val = parseFloat(intervals[iIdx].weightingAgentConcentration);
+                                
+                                return (
+                                  <td key={iIdx} className="px-8 py-4 text-center text-sm">
+                                    <span className={`px-4 py-2 rounded-xl inline-block min-w-[80px] font-black tracking-tighter ${
+                                      rIdx % 2 === 0 ? 'bg-slate-100 text-slate-700' : 'bg-blue-50 text-blue-600'
+                                    }`}>
+                                      {typeof val === 'number' ? val.toFixed(2) : val}
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
           {activeTab === 'inputs' && (
             <motion.div 
-              key="inputs"
-              initial={{ opacity: 0, y: 10 }}
+              key={`inputs-${activeIntervalIndex}`}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              exit={{ opacity: 0, y: -20 }}
               className="max-w-4xl mx-auto"
             >
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-800">Параметры скважины и раствора</h2>
-                <p className="text-slate-500">Введите технологические параметры для расчета оптимального состава</p>
+              <div className="mb-8 p-6 bg-white border border-slate-200 rounded-3xl shadow-sm flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black uppercase rounded-full tracking-widest leading-none">Секция №{activeIntervalIndex + 1}</span>
+                    <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">{intervals[activeIntervalIndex].intervalStart} — {intervals[activeIntervalIndex].intervalEnd} м</h2>
+                  </div>
+                  <p className="text-slate-400 text-sm font-medium">Конфигурация параметров для текущего интервала бурения</p>
+                </div>
+                <div className="hidden sm:flex flex-col items-end">
+                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1 italic">Объем с пред. секции</p>
+                  <div className="text-xl font-black text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-4">{inputs.prevIntervalVolume} м³</div>
+                </div>
               </div>
 
               <InputGroup title="Геометрия скважины" id="geometry" expandedSection={expandedSection} onToggle={handleToggleSection}>
@@ -340,6 +621,97 @@ export default function App() {
                 <InputField label="Низковязкий (PAC-LV)" name="lpPolymerConcentration" unit="кг/м3" value={inputs.lpPolymerConcentration as string} onChange={handleInputChange as any} />
                 <InputField label="Высоковязкий (PAC-HV)" name="hpPolymerConcentration" unit="кг/м3" value={inputs.hpPolymerConcentration as string} onChange={handleInputChange as any} />
                 <InputField label="Структурообразователь (XC)" name="xcPolymerConcentration" unit="кг/м3" value={inputs.xcPolymerConcentration as string} onChange={handleInputChange as any} />
+              </InputGroup>
+
+              <InputGroup title="Траектория (Инклинометрия)" id="trajectory" expandedSection={expandedSection} onToggle={handleToggleSection}>
+                <InputField label="Зенитный угол (начало)" name="inclinationStart" unit="°" value={inputs.inclinationStart as string} onChange={handleInputChange as any} />
+                <InputField label="Зенитный угол (конец)" name="inclinationEnd" unit="°" value={inputs.inclinationEnd as string} onChange={handleInputChange as any} />
+                <InputField label="Азимут (начало)" name="azimuthStart" unit="°" value={inputs.azimuthStart as string} onChange={handleInputChange as any} />
+                <InputField label="Азимут (конец)" name="azimuthEnd" unit="°" value={inputs.azimuthEnd as string} onChange={handleInputChange as any} />
+                
+                <div className="col-span-1 md:col-span-2 mt-4">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Промежуточные замеры</h4>
+                    <button 
+                      onClick={() => {
+                        const nextPoints = [...(inputs.surveyPoints || [])];
+                        // Suggest a depth in the middle of current interval if it's the first point
+                        const start = parseFloat(inputs.intervalStart.replace(',', '.'));
+                        const end = parseFloat(inputs.intervalEnd.replace(',', '.'));
+                        const suggestMD = (start + (end - start) / 2).toString();
+                        
+                        nextPoints.push({ md: suggestMD, inclination: '0', azimuth: '0' });
+                        // Sort by MD
+                        nextPoints.sort((a, b) => parseFloat(a.md) - parseFloat(b.md));
+                        handleInputChange('surveyPoints' as any, nextPoints);
+                      }}
+                      className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all flex items-center gap-2"
+                    >
+                      <RefreshCcw size={10} className="rotate-45" />
+                      Добавить замер
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                    {(inputs.surveyPoints || []).map((point, pIdx) => (
+                      <div key={pIdx} className="grid grid-cols-4 gap-2 items-end bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-200">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Глубина (MD), м</label>
+                          <input 
+                            type="text" 
+                            value={point.md} 
+                            onChange={(e) => {
+                              const nextPoints = [...(inputs.surveyPoints || [])];
+                              nextPoints[pIdx] = { ...nextPoints[pIdx], md: e.target.value };
+                              handleInputChange('surveyPoints' as any, nextPoints);
+                            }}
+                            className="w-full px-2 py-1 bg-slate-50 border border-slate-100 rounded text-xs font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Угол (Inc), °</label>
+                          <input 
+                            type="text" 
+                            value={point.inclination} 
+                            onChange={(e) => {
+                              const nextPoints = [...(inputs.surveyPoints || [])];
+                              nextPoints[pIdx] = { ...nextPoints[pIdx], inclination: e.target.value };
+                              handleInputChange('surveyPoints' as any, nextPoints);
+                            }}
+                            className="w-full px-2 py-1 bg-slate-50 border border-slate-100 rounded text-xs font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Азимут (Az), °</label>
+                          <input 
+                            type="text" 
+                            value={point.azimuth} 
+                            onChange={(e) => {
+                              const nextPoints = [...(inputs.surveyPoints || [])];
+                              nextPoints[pIdx] = { ...nextPoints[pIdx], azimuth: e.target.value };
+                              handleInputChange('surveyPoints' as any, nextPoints);
+                            }}
+                            className="w-full px-2 py-1 bg-slate-50 border border-slate-100 rounded text-xs font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const nextPoints = (inputs.surveyPoints || []).filter((_, i) => i !== pIdx);
+                            handleInputChange('surveyPoints' as any, nextPoints);
+                          }}
+                          className="bg-red-50 text-red-500 p-1.5 rounded hover:bg-red-100 transition-colors flex items-center justify-center"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {(inputs.surveyPoints || []).length === 0 && (
+                      <div className="text-center py-6 border-2 border-dashed border-slate-100 rounded-2xl">
+                        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Промежуточные точки не добавлены</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </InputGroup>
 
               <div className="flex justify-center mt-10">

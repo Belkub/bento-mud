@@ -25,9 +25,15 @@ export interface MudInputs {
   cleaningStages: number; // num19 (num_o)
   mudVolumeInTanks: number; // num20 (value)
   prevIntervalVolume: number; // num21 (value_pre)
-  lpPolymerConcentration: number; // num23 (L)
-  hpPolymerConcentration: number; // num24 (H)
-  xcPolymerConcentration: number; // num25 (X)
+  lpPolymerConcentration: number;
+  hpPolymerConcentration: number;
+  xcPolymerConcentration: number;
+  // Trajectory fields (optional, will be 0 if not provided)
+  inclinationStart?: number;
+  inclinationEnd?: number;
+  azimuthStart?: number;
+  azimuthEnd?: number;
+  surveyPoints?: Array<{ md: number; inclination: number; azimuth: number }>;
 }
 
 export interface CalculationResults {
