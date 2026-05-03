@@ -1,4 +1,4 @@
-import { useMemo, Suspense } from 'react';
+import { useMemo, Suspense, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Line, Sphere, PerspectiveCamera, Stars, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -33,7 +33,7 @@ function calculateTrajectory(intervals: MudInputs[]): TrajectoryPoint[] {
 
     // Определяем радиус и цвет для этого интервала
     const isLast = idx === sortedIntervals.length - 1;
-    const diameterInMm = isLast ? (Number(inv.bitDiameter) || 215.9) : (Number(inv.casingInternalDiameter) || 244.5);
+    const diameterInMm = isLast ? (Number(inv.bitDiameter) || 215.9) : (Number(inv.nextCasingInternalDiameter) || Number(inv.prevCasingInternalDiameter) || 244.5);
     const radius = (diameterInMm / 1000) / 2;
     const color = SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
 
@@ -167,14 +167,12 @@ function WellboreScene({ points, intervals, maxDimension }: { points: Trajectory
 
   return (
     <group>
-      <ambientLight intensity={1.5} />
+      <ambientLight intensity={1} />
       <pointLight position={[2000, 2000, 2000]} intensity={1} />
       <directionalLight position={[0, 1000, 0]} intensity={0.5} />
       
-      <Stars radius={maxDimension * 10} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
-
-      {/* Поверхностная сетка */}
-      <gridHelper args={[maxDimension * 10, 80, 0x334155, 0x1e293b]} position={[0, 0, 0]} />
+      {/* Surface grid helper - light theme */}
+      <gridHelper args={[maxDimension * 10, 80, 0x94a3b8, 0xe2e8f0]} position={[0, 0, 0]} />
 
       {/* Вертикальная ось */}
       <Line
@@ -201,9 +199,9 @@ function WellboreScene({ points, intervals, maxDimension }: { points: Trajectory
         // Позиция центра
         const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
         
-        // Масштабируем радиус для достижения ЭКСТРЕМАЛЬНОГО визуального контраста.
-        const baseFactor = maxDimension * 0.012; // Увеличили базовый коэффициент в 2 раза
-        const relativeScale = Math.pow(p.radius / 0.08, 2.5); 
+        // Масштабируем радиус для достижения ЗАМЕТНОГО визуального контраста.
+        const baseFactor = maxDimension * 0.006; 
+        const relativeScale = Math.pow(p.radius / 0.08, 1.05); 
         const displayRadius = baseFactor * relativeScale;
 
         return (
@@ -216,7 +214,7 @@ function WellboreScene({ points, intervals, maxDimension }: { points: Trajectory
             <meshStandardMaterial 
               color={p.color} 
               emissive={p.color} 
-              emissiveIntensity={0.2}
+              emissiveIntensity={0.6}
               roughness={0.1}
               metalness={0.9}
             />
@@ -253,7 +251,7 @@ function WellboreScene({ points, intervals, maxDimension }: { points: Trajectory
             />
           </Sphere>
           <Html position={[markerSize * 2.5, 0, 0]} center>
-            <div className={`bg-slate-900/80 backdrop-blur-sm px-2 py-1 rounded border border-white/10 text-white text-[9px] font-bold shadow-lg whitespace-nowrap ${!marker.isInterval ? 'opacity-70 scale-90' : ''}`}>
+            <div className={`bg-white/90 backdrop-blur-sm px-2 py-1 rounded border border-slate-200 text-slate-900 text-[9px] font-bold shadow-md whitespace-nowrap ${!marker.isInterval ? 'opacity-70 scale-90' : ''}`}>
               {`${marker.md}м`}
             </div>
           </Html>
@@ -266,7 +264,7 @@ function WellboreScene({ points, intervals, maxDimension }: { points: Trajectory
           <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={0.6} />
         </Sphere>
         <Html position={[0, markerSize * 5, 0]} center>
-          <div className="text-emerald-400 font-bold text-[10px] tracking-widest uppercase bg-slate-950/80 px-3 py-1 rounded-xl border border-emerald-500/30">
+          <div className="text-emerald-700 font-bold text-[10px] tracking-widest uppercase bg-white/90 px-3 py-1 rounded-xl border border-emerald-500/30 shadow-md">
             УСТЬЕ
           </div>
         </Html>
@@ -288,6 +286,7 @@ function WellboreScene({ points, intervals, maxDimension }: { points: Trajectory
 }
 
 export default function TrajectoryVisualization({ intervals }: { intervals: MudInputs[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const points = useMemo(() => calculateTrajectory(intervals), [intervals]);
   
   const bounds = useMemo(() => {
@@ -317,14 +316,14 @@ export default function TrajectoryVisualization({ intervals }: { intervals: MudI
   const cameraPos: [number, number, number] = [maxDimension * 1.8, maxDimension * 1.2, maxDimension * 1.8];
 
   return (
-    <div className="w-full h-[700px] bg-[#020617] rounded-[48px] border-[10px] border-slate-900 overflow-hidden shadow-2xl relative">
-      <div className="absolute top-6 left-6 z-10 pointer-events-none p-6 bg-slate-900/30 backdrop-blur-3xl rounded-[32px] border border-white/5">
-        <h4 className="text-[8px] font-black text-blue-400 uppercase tracking-[0.6em] mb-1 leading-none ps-1 opacity-60">Геометрическая модель</h4>
-        <p className="text-xl font-black text-white tracking-tighter uppercase italic leading-none border-b-2 border-blue-500 pb-1.5">3D Профиль</p>
+    <div ref={containerRef} className="w-full h-[700px] bg-slate-50 rounded-[48px] border-[10px] border-white overflow-hidden shadow-2xl relative">
+      <div className="absolute top-6 left-6 z-10 pointer-events-none p-6 bg-white/40 backdrop-blur-3xl rounded-[32px] border border-white/20">
+        <h4 className="text-[8px] font-black text-blue-600 uppercase tracking-[0.6em] mb-1 leading-none ps-1 opacity-60">Геометрическая модель</h4>
+        <p className="text-xl font-black text-slate-900 tracking-tighter uppercase italic leading-none border-b-2 border-blue-500 pb-1.5">3D Профиль</p>
       </div>
 
-      <Canvas shadows>
-        <color attach="background" args={['#020617']} />
+      <Canvas shadows gl={{ preserveDrawingBuffer: true }}>
+        <color attach="background" args={['#f8fafc']} />
         <PerspectiveCamera makeDefault position={cameraPos} fov={40} near={1} far={500000} />
         
         <Suspense fallback={null}>
@@ -342,12 +341,12 @@ export default function TrajectoryVisualization({ intervals }: { intervals: MudI
 
       {/* Легенда */}
       <div className="absolute bottom-10 left-10 z-10 flex flex-wrap gap-5">
-        <div className="px-8 py-5 bg-slate-900/90 backdrop-blur-2xl border border-white/5 rounded-3xl flex flex-wrap gap-x-10 gap-y-4 text-[11px] font-bold text-slate-400 tracking-[0.1em] uppercase items-center max-w-[80vw]">
-           <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div> Интервалы (разные цвета)</div>
+        <div className="px-8 py-5 bg-white/90 backdrop-blur-2xl border border-white rounded-3xl shadow-xl flex flex-wrap gap-x-10 gap-y-4 text-[11px] font-bold text-slate-600 tracking-[0.1em] uppercase items-center max-w-[80vw]">
+           <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div> Интервалы</div>
            <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-purple-500 shadow-lg shadow-purple-500/50"></div> Замеры</div>
-           <div className="flex items-center gap-3 pr-10 border-r border-slate-800"><div className="w-4 h-4 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div> Устье</div>
-           <div className="flex items-center gap-5 text-slate-500">
-             <div className="w-10 h-0.5 border-t-2 border-dashed border-slate-600"></div> 
+           <div className="flex items-center gap-3 pr-10 border-r border-slate-200"><div className="w-4 h-4 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div> Устье</div>
+           <div className="flex items-center gap-5 text-slate-400">
+             <div className="w-10 h-0.5 border-t-2 border-dashed border-slate-300"></div> 
              <span className="font-black">Вертикаль</span>
            </div>
         </div>

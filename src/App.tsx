@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect, ReactNode } from 'react';
+import { useState, useMemo, useEffect, ReactNode, useRef } from 'react';
 import { 
   Calculator, 
   Settings, 
@@ -16,7 +16,8 @@ import {
   Maximize2,
   RefreshCcw,
   XCircle,
-  RotateCcw
+  RotateCcw,
+  FileDown
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -35,6 +36,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MudInputs, CalculationResults } from './types';
 import { calculateMudParameters } from './utils/calculations';
 import TrajectoryVisualization from './components/TrajectoryVisualization';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, AlignmentType, HeadingLevel, TextRun, BorderStyle, ImageRun } from 'docx';
+import { saveAs } from 'file-saver';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -204,6 +210,291 @@ export default function App() {
     return new Set();
   });
 
+  const trajectoryRef = useRef<HTMLDivElement>(null);
+  const summaryTablesRef = useRef<HTMLDivElement>(null);
+  const summaryViewRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const tableConfigs = useMemo(() => [
+    { 
+      id: 'mud',
+      title: 'Фазовый состав раствора', 
+      icon: <Database size={18} className="text-blue-500" />,
+      rows: (res: CalculationResults, idx: number) => [
+        { id: 'cbent', label: 'Достаточная конц. бентонита (кг/м3)', value: res.cbent.toFixed(0) },
+        { id: 'ccolr', label: 'Конц. коллоидной фазы (кг/м3)', value: res.ccolr.toFixed(2) },
+        { id: 'ccol', label: 'Конц. коллоидной фазы (%)', value: res.ccol.toFixed(2) },
+        { id: 'cshp', label: 'Конц. шлама в растворе (%)', value: res.cshp.toFixed(2) },
+        { id: 'kolm', label: 'Конц. кольматанта (кг/м3)', value: res.kolm.toFixed(1) },
+        { id: 'ut_kg', label: 'Конц. утяжелителя (кг/м3)', value: parseFloat(intervals[idx].weightingAgentConcentration).toFixed(2) },
+        { id: 'ut_perc', label: 'Конц. утяжелителя (%)', value: res.icup.toFixed(2) },
+        { id: 'octf', label: 'Общая конц. твердой фазы (%)', value: res.octf.toFixed(2), highlight: true }
+      ]
+    },
+    { 
+      id: 'vol',
+      title: 'Баланс объемов раствора', 
+      icon: <Maximize2 size={18} className="text-amber-500" />,
+      rows: (res: CalculationResults) => [
+        { id: 'korc', label: 'Толщина корки (мм)', value: res.korc.toFixed(2) },
+        { id: 'vk', label: 'Объем корки (м3)', value: res.vk.toFixed(2) },
+        { id: 'ff', label: 'Потери на фильтрацию (м3)', value: res.Ff.toFixed(2), color: 'text-red-500' },
+        { id: 'fs', label: 'Потери на очистке (м3)', value: res.Fs.toFixed(2), color: 'text-red-500' },
+        { id: 'f_tot', label: 'Общие потери (м3)', value: res.F.toFixed(2), color: 'text-red-600 font-extrabold' },
+        { id: 'vkon', label: 'Объем скважины (м3)', value: res.Vkon.toFixed(2) },
+        { id: 'vp', label: 'Объем приготовленного (м3)', value: res.Vp.toFixed(2), color: 'text-emerald-600' },
+        { id: 'vper', label: 'К переводу на след. (м3)', value: res.Vper.toFixed(2), color: 'text-blue-600' },
+        { id: 'vprev', label: 'С предыд. интервала (м3)', value: res.value_pre.toFixed(2) }
+      ]
+    },
+    { 
+      id: 'slurry',
+      title: 'Фазовый состав шлама', 
+      icon: <TrendingUp size={18} className="text-emerald-500" />,
+      rows: (res: CalculationResults) => [
+        { id: 'vsh', label: 'Объем шлама (м3)', value: res.csh_volume.toFixed(2) },
+        { id: 'msh', label: 'Масса шлама (тонны)', value: res.csh_mass.toFixed(2) },
+        { id: 'csh', label: 'Горная фаза в шламе (%)', value: res.Csh.toFixed(2), color: 'text-emerald-600' },
+        { id: 'cr', label: 'Твердая фаза раствора (%)', value: res.Cr.toFixed(2) },
+        { id: 'ctot', label: 'Общая тв. фаза в шламе (%)', value: (res.Csh + res.Cr).toFixed(2), color: 'text-slate-900 font-extrabold' },
+        { id: 'cw', label: 'Водная фаза в шламе (%)', value: res.WaterSlurry.toFixed(2), color: 'text-blue-500' }
+      ]
+    },
+    { 
+      id: 'filt',
+      title: 'Расчет фильтрации', 
+      icon: <Settings size={18} className="text-purple-500" />,
+      rows: (res: CalculationResults) => [
+        { id: 'visc', label: 'Вязкость дисп. среды (мПа·с)', value: (res.viscosity * 1000).toFixed(2) },
+        { id: 'find', label: 'Показатель фильтрации', value: res.filtrationIndex.toFixed(2), color: 'text-purple-600 font-extrabold' },
+      ]
+    }
+  ], [intervals]);
+
+  const downloadWord = async () => {
+    const element = summaryViewRef.current || document.getElementById('summary-view');
+    if (!element) {
+      alert('Ошибка: Область отчета не найдена. Убедитесь, что вы находитесь на вкладке "Итоговая сводка".');
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      
+      const scrollY = window.scrollY;
+      window.scrollTo(0, 0);
+      
+      await new Promise(r => setTimeout(r, 2000));
+
+      const docInfoParagraphs = [
+          new Paragraph({
+            text: "BentoMud Pro - Инженерный отчет",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Дата отчета: ${new Date().toLocaleDateString('ru-RU')}`, bold: true }),
+            ],
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Всего интервалов: ${intervals.length}`, bold: true }),
+            ],
+            spacing: { after: 400 },
+          }),
+      ];
+
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              size: {
+                orientation: 'landscape',
+              },
+            },
+          },
+          children: [
+            ...docInfoParagraphs,
+            ...tableConfigs.flatMap((tableConfig) => {
+              const headerRow = new TableRow({
+                children: [
+                  new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "Показатель", bold: true })] })],
+                    shading: { fill: "f1f5f9" },
+                  }),
+                  ...intervals.map((_, iIdx) => new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: `Инт. ${iIdx + 1}`, bold: true })], alignment: AlignmentType.CENTER })],
+                    shading: { fill: "f1f5f9" },
+                  })),
+                ],
+              });
+
+              const dataRows = tableConfig.rows(allResults[0], 0).map((rowRef, rIdx) => {
+                return new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: rowRef.label })],
+                    }),
+                    ...allResults.map((res, iIdx) => {
+                      const rowData = tableConfig.rows(res, iIdx)[rIdx];
+                      return new TableCell({
+                        children: [new Paragraph({ text: rowData.value, alignment: AlignmentType.CENTER })],
+                      });
+                    }),
+                  ],
+                });
+              });
+
+              return [
+                new Paragraph({
+                  text: tableConfig.title,
+                  heading: HeadingLevel.HEADING_2,
+                  spacing: { before: 400, after: 200 },
+                }),
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  rows: [headerRow, ...dataRows],
+                }),
+              ];
+            }),
+          ],
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `BentoMud_Report_${new Date().toISOString().split('T')[0]}.docx`);
+      window.scrollTo(0, scrollY);
+    } catch (e) {
+      console.error('Word Export Error:', e);
+      alert('Ошибка при сохранении Word. Попробуйте еще раз.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const downloadPDF = async () => {
+    if (isDownloading) return;
+    
+    // Explicitly find the container
+    const element = summaryViewRef.current || document.getElementById('summary-view');
+    if (!element) {
+      alert('Ошибка: Область отчета не найдена. Убедитесь, что вы находитесь на вкладке "Итоговая сводка".');
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      
+      // Store current scroll and scroll to top for clean capture
+      const scrollY = window.scrollY;
+      window.scrollTo(0, 0);
+      
+      // Longer wait for 3D/Charts
+      await new Promise(r => setTimeout(r, 2000));
+
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 10;
+      const contentWidth = pageWidth - (margin * 2);
+
+      // We will capture headers, the trajectory, and then EACH table individually
+      // to avoid memory issues and long single-canvas problems.
+      const elementsToCapture: HTMLElement[] = [];
+      
+      // 1. Header
+      const header = element.querySelector('.flex.flex-col.md\\:flex-row.md\\:items-end');
+      if (header) elementsToCapture.push(header as HTMLElement);
+      
+      // 2. Trajectory
+      if (trajectoryRef.current) elementsToCapture.push(trajectoryRef.current);
+      
+      // 3. Tables
+      if (summaryTablesRef.current) {
+        const tables = summaryTablesRef.current.querySelectorAll('.bg-white.border.border-slate-200');
+        tables.forEach(t => elementsToCapture.push(t as HTMLElement));
+      }
+
+      // Fallback
+      if (elementsToCapture.length === 0) elementsToCapture.push(element);
+
+      let currentY = margin;
+
+      for (let i = 0; i < elementsToCapture.length; i++) {
+        const el = elementsToCapture[i];
+        
+        // Hide specific elements like buttons before capture
+        const buttons = el.querySelectorAll('button, [data-download-btn]');
+        buttons.forEach(b => (b as HTMLElement).style.opacity = '0');
+
+        try {
+          let imgData = '';
+          let canvasWidth = 0;
+          let canvasHeight = 0;
+
+          // SPECIAL HANDLING FOR 3D CANVAS
+          const threeCanvas = el.querySelector('canvas');
+          if (threeCanvas && (el.classList.contains('h-[700px]') || el.getAttribute('data-chart-container'))) {
+             try {
+               imgData = threeCanvas.toDataURL('image/jpeg', 0.95);
+               canvasWidth = threeCanvas.width;
+               canvasHeight = threeCanvas.height;
+             } catch (canvasErr) {
+               console.error("Canvas toDataURL failed:", canvasErr);
+             }
+          }
+          
+          if (!imgData) {
+            const canvas = await html2canvas(el, {
+              scale: 2,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: el.classList.contains('bg-[#020617]') || el.classList.contains('bg-slate-950') ? '#020617' : '#ffffff',
+              imageTimeout: 20000,
+              logging: false,
+            });
+            imgData = canvas.toDataURL('image/jpeg', 0.95);
+            canvasWidth = canvas.width;
+            canvasHeight = canvas.height;
+          }
+
+          // Restore buttons
+          buttons.forEach(b => (b as HTMLElement).style.opacity = '1');
+
+          if (canvasWidth > 0 && imgData && imgData !== 'data:,') {
+            const imgHeight = (canvasHeight * contentWidth) / canvasWidth;
+
+            // Page break check
+            if (currentY + imgHeight > pageHeight - margin) {
+              doc.addPage();
+              currentY = margin;
+            }
+
+            doc.addImage(imgData, 'JPEG', margin, currentY, contentWidth, imgHeight);
+            currentY += imgHeight + 8;
+          }
+          
+          // Small pause between sections
+          await new Promise(r => setTimeout(r, 100));
+        } catch (err) {
+          console.error(`Section ${i} capture error:`, err);
+          buttons.forEach(b => (b as HTMLElement).style.opacity = '1');
+        }
+      }
+
+      doc.save(`BentoMud_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      window.scrollTo(0, scrollY);
+    } catch (e) {
+      console.error('Master PDF Error:', e);
+      alert('Ошибка при сохранении PDF. Попробуйте нажать кнопку еще раз.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   // Persist state to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -226,7 +517,7 @@ export default function App() {
     });
   };
 
-  const handleInputChange = (name: keyof MudInputs, value: string | boolean) => {
+  const handleInputChange = (name: keyof MudInputs, value: any) => {
     setIntervals(prev => {
       const next = [...prev];
       next[activeIntervalIndex] = {
@@ -439,17 +730,34 @@ export default function App() {
           {activeTab === 'summary' && (
             <motion.div
               key="summary"
+              id="summary-view"
+              ref={summaryViewRef}
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="flex flex-col gap-10"
+              className="flex flex-col gap-10 p-4"
             >
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-slate-900 pb-8">
                 <div>
                   <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase mb-2">Итоговая сводка</h2>
                   <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-xs">Аналитика по всем интервалам бурения</p>
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={downloadWord}
+                    disabled={isDownloading}
+                    data-download-btn
+                    className={`${isDownloading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-105 active:scale-95'} text-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 transition-all`}
+                  >
+                    {isDownloading ? (
+                      <RefreshCcw size={20} className="animate-spin" />
+                    ) : (
+                      <Download size={20} />
+                    )}
+                    <span className="font-black uppercase tracking-widest text-xs">
+                      {isDownloading ? 'Ждите...' : 'Word отчет'}
+                    </span>
+                  </button>
                   <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 leading-none">Всего интервалов</p>
                     <p className="text-2xl font-black">{intervals.length}</p>
@@ -462,85 +770,70 @@ export default function App() {
               </div>
 
               {/* 3D Visualization */}
-              <TrajectoryVisualization 
-                intervals={intervals.map(inv => parseSingleInputs(inv))} 
-              />
+              <div ref={trajectoryRef}>
+                <TrajectoryVisualization 
+                  intervals={intervals.map(inv => parseSingleInputs(inv))} 
+                />
+              </div>
 
               {/* Summary Table Set */}
-              <div className="grid grid-cols-1 gap-12">
-                {[
-                  { 
-                    title: 'Фазовый состав раствора', 
-                    icon: <Database className="text-blue-500" />,
-                    rows: [
-                      { label: 'Общая тв. фаза (%)', key: 'octf' },
-                      { label: 'Коллоидная фаза (%)', key: 'ccol' },
-                      { label: 'Конц. шлама (%)', key: 'cshp' },
-                      { label: 'Конц. бентонита (кг/м³)', key: 'cbent' },
-                      { label: 'Конц. кольматанта (кг/м³)', key: 'kolm' },
-                      { label: 'Конц. утяжелителя (кг/м³)', key: 'icup_kg' }
-                    ]
-                  },
-                  { 
-                    title: 'Баланс объемов', 
-                    icon: <Maximize2 className="text-amber-500" />,
-                    rows: [
-                      { label: 'Объем скважины (м³)', key: 'Vkon' },
-                      { label: 'Объем приготовленного (м³)', key: 'Vp' },
-                      { label: 'Потери на фильтрацию (м³)', key: 'Ff' },
-                      { label: 'Потери на очистке (м³)', key: 'Fs' },
-                      { label: 'Общие потери (м³)', key: 'F' },
-                      { label: 'К переводу на след. (м³)', key: 'Vper' }
-                    ]
-                  },
-                  { 
-                    title: 'Фазовый состав шлама', 
-                    icon: <TrendingUp className="text-emerald-500" />,
-                    rows: [
-                      { label: 'Горная порода (%)', key: 'Csh' },
-                      { label: 'Твердая фаза раствора (%)', key: 'Cr' },
-                      { label: 'Водная фаза (%)', key: 'WaterSlurry' }
-                    ]
-                  }
-                ].map((table, tIdx) => (
+              <div className="grid grid-cols-1 gap-12" ref={summaryTablesRef}>
+                {tableConfigs.map((table, tIdx) => (
                   <div key={tIdx} className="bg-white border border-slate-200 rounded-[30px] overflow-hidden shadow-sm">
-                    <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
-                      {table.icon}
-                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">{table.title}</h3>
+                    <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {table.icon}
+                        <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">{table.title}</h3>
+                      </div>
+                      {hasHiddenInTable(table.id) && (
+                        <button onClick={() => restoreTable(table.id)} className="text-slate-400 hover:text-blue-500 transition-colors" title="Восстановить строки">
+                          <RotateCcw size={18} />
+                        </button>
+                      )}
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full border-collapse">
                         <thead>
                           <tr className="bg-slate-50/50">
-                            <th className="px-8 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 min-w-[250px]">Показатель</th>
+                            <th className="px-8 py-4 text-left text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 min-w-[250px]">Показатель</th>
                             {intervals.map((_, iIdx) => (
-                              <th key={iIdx} className="px-8 py-4 text-center text-[10px] font-black uppercase tracking-widest text-blue-600 border-b border-slate-100 min-w-[150px]">
+                              <th key={iIdx} className="px-8 py-4 text-center text-xs font-black uppercase tracking-widest text-blue-600 border-b border-slate-100 min-w-[150px]">
                                 Интервал {iIdx + 1}
-                                <span className="block text-[8px] text-slate-400 font-medium mt-1">{intervals[iIdx].intervalStart}-{intervals[iIdx].intervalEnd} м</span>
+                                <span className="block text-[9px] text-slate-400 font-medium mt-1">{intervals[iIdx].intervalStart}-{intervals[iIdx].intervalEnd} м</span>
                               </th>
                             ))}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 italic font-medium">
-                          {table.rows.map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors group">
-                              <td className="px-8 py-4 text-sm text-slate-600 font-bold group-hover:text-slate-900 transition-colors uppercase tracking-tight leading-none">{row.label}</td>
-                              {allResults.map((res, iIdx) => {
-                                let val: any = res[row.key as keyof CalculationResults];
-                                if (row.key === 'icup_kg') val = parseFloat(intervals[iIdx].weightingAgentConcentration);
-                                
-                                return (
-                                  <td key={iIdx} className="px-8 py-4 text-center text-sm">
-                                    <span className={`px-4 py-2 rounded-xl inline-block min-w-[80px] font-black tracking-tighter ${
-                                      rIdx % 2 === 0 ? 'bg-slate-100 text-slate-700' : 'bg-blue-50 text-blue-600'
-                                    }`}>
-                                      {typeof val === 'number' ? val.toFixed(2) : val}
-                                    </span>
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
+                          {table.rows(allResults[0], 0).map((rowRef, rIdx) => {
+                            if (hiddenRows.has(`${table.id}_${rowRef.id}`)) return null;
+                            
+                            return (
+                              <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors group">
+                                <td className="px-8 py-4 text-sm text-slate-600 font-bold group-hover:text-slate-900 transition-colors uppercase tracking-tight leading-none flex items-center gap-3">
+                                  <button 
+                                    onClick={() => toggleRow(`${table.id}_${rowRef.id}`)}
+                                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all"
+                                  >
+                                    <XCircle size={14} />
+                                  </button>
+                                  {rowRef.label}
+                                </td>
+                                {allResults.map((res, iIdx) => {
+                                  const row = table.rows(res, iIdx)[rIdx];
+                                  return (
+                                    <td key={iIdx} className="px-8 py-4 text-center text-base">
+                                      <span className={`px-4 py-2 rounded-xl inline-block min-w-[80px] font-black tracking-tighter ${
+                                        rIdx % 2 === 0 ? 'bg-slate-100 text-slate-700' : 'bg-blue-50 text-blue-600'
+                                      }`}>
+                                        {row.value}
+                                      </span>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -782,16 +1075,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {[
-                      { id: 'cbent', label: 'Достаточная конц. бентонита (кг/м3)', value: results.cbent.toFixed(0) },
-                      { id: 'ccolr', label: 'Конц. коллоидной фазы (кг/м3)', value: results.ccolr.toFixed(2) },
-                      { id: 'ccol', label: 'Конц. коллоидной фазы (%)', value: results.ccol.toFixed(2) },
-                      { id: 'cshp', label: 'Конц. шлама в растворе (%)', value: results.cshp.toFixed(2) },
-                      { id: 'kolm', label: 'Конц. кольматанта (кг/м3)', value: results.kolm.toFixed(1) },
-                      { id: 'ut_kg', label: 'Конц. утяжелителя (кг/м3)', value: parseFloat(inputs.weightingAgentConcentration).toFixed(2) },
-                      { id: 'ut_perc', label: 'Конц. утяжелителя (%)', value: results.icup.toFixed(2) },
-                      { id: 'octf', label: 'Общая конц. твердой фазы (%)', value: results.octf.toFixed(2), highlight: true }
-                    ].map((row, index) => !hiddenRows.has(`mud_${row.id}`) && (
+                    {tableConfigs[0].rows(results, activeIntervalIndex).map((row, index) => !hiddenRows.has(`mud_${row.id}`) && (
                       <div key={row.id} className={`px-6 py-3.5 flex justify-between items-center group relative ${index % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
                         <div className="flex items-center gap-3 transition-all">
                           <button 
@@ -812,8 +1096,8 @@ export default function App() {
                 <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm lg:col-span-1">
                   <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Maximize2 size={18} className="text-amber-500" />
-                      <h3 className="font-bold text-slate-800">Баланс объемов раствора</h3>
+                       <Maximize2 size={18} className="text-amber-500" />
+                       <h3 className="font-bold text-slate-800">Баланс объемов раствора</h3>
                     </div>
                     {hasHiddenInTable('vol') && (
                       <button onClick={() => restoreTable('vol')} className="text-amber-500 hover:text-amber-600 transition-colors" title="Восстановить таблицу">
@@ -822,17 +1106,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {[
-                      { id: 'korc', label: 'Толщина корки (мм)', value: results.korc.toFixed(2) },
-                      { id: 'vk', label: 'Объем корки (м3)', value: results.vk.toFixed(2) },
-                      { id: 'ff', label: 'Потери на фильтрацию (м3)', value: results.Ff.toFixed(2), color: 'text-red-500' },
-                      { id: 'fs', label: 'Потери на очистке (м3)', value: results.Fs.toFixed(2), color: 'text-red-500' },
-                      { id: 'f_tot', label: 'Общие потери (м3)', value: results.F.toFixed(2), color: 'text-red-600 font-extrabold' },
-                      { id: 'vkon', label: 'Объем скважины (м3)', value: results.Vkon.toFixed(2) },
-                      { id: 'vp', label: 'Объем приготовленного (м3)', value: results.Vp.toFixed(2), color: 'text-emerald-600' },
-                      { id: 'vper', label: 'К переводу на след. (м3)', value: results.Vper.toFixed(2), color: 'text-blue-600' },
-                      { id: 'vprev', label: 'С предыд. интервала (м3)', value: results.value_pre.toFixed(2) }
-                    ].map((row, index) => !hiddenRows.has(`vol_${row.id}`) && (
+                    {tableConfigs[1].rows(results, activeIntervalIndex).map((row, index) => !hiddenRows.has(`vol_${row.id}`) && (
                       <div key={row.id} className={`px-6 py-3.5 flex justify-between items-center group relative ${index % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
                         <div className="flex items-center gap-3">
                           <button 
@@ -863,14 +1137,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {[
-                      { id: 'vsh', label: 'Объем шлама (м3)', value: results.csh_volume.toFixed(2) },
-                      { id: 'msh', label: 'Масса шлама (тонны)', value: results.csh_mass.toFixed(2) },
-                      { id: 'csh', label: 'Горная фаза в шламе (%)', value: results.Csh.toFixed(2), color: 'text-emerald-600' },
-                      { id: 'cr', label: 'Твердая фаза раствора (%)', value: results.Cr.toFixed(2) },
-                      { id: 'ctot', label: 'Общая тв. фаза в шламе (%)', value: (results.Csh + results.Cr).toFixed(2), color: 'text-slate-900 font-extrabold' },
-                      { id: 'cw', label: 'Водная фаза в шламе (%)', value: results.WaterSlurry.toFixed(2), color: 'text-blue-500' }
-                    ].map((row, index) => !hiddenRows.has(`slurry_${row.id}`) && (
+                    {tableConfigs[2].rows(results, activeIntervalIndex).map((row, index) => !hiddenRows.has(`slurry_${row.id}`) && (
                       <div key={row.id} className={`px-6 py-3.5 flex justify-between items-center group relative ${index % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
                         <div className="flex items-center gap-3">
                           <button 
@@ -901,10 +1168,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {[
-                      { id: 'visc', label: 'Вязкость дисп. среды (мПа·с)', value: (results.viscosity * 1000).toFixed(2) },
-                      { id: 'find', label: 'Показатель фильтрации', value: results.filtrationIndex.toFixed(2), color: 'text-purple-600 font-extrabold' },
-                    ].map((row, index) => !hiddenRows.has(`filt_${row.id}`) && (
+                    {tableConfigs[3].rows(results, activeIntervalIndex).map((row, index) => !hiddenRows.has(`filt_${row.id}`) && (
                       <div key={row.id} className={`px-6 py-3.5 flex justify-between items-center group relative ${index % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
                         <div className="flex items-center gap-3">
                           <button 
@@ -1093,10 +1357,10 @@ export default function App() {
                         iconType="line"
                         formatter={(value) => <span className="text-slate-700 font-extrabold text-xs uppercase tracking-widest px-2">{value}</span>}
                       />
-                      <Line type="monotone" dataKey="LP" name="LP (PAC-LV)" stroke="#3b82f6" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                      <Line type="monotone" dataKey="HP" name="HP (PAC-HV)" stroke="#10b981" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                      <Line type="monotone" dataKey="XC" name="XC (Биополимер)" stroke="#f59e0b" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                      <Line type="monotone" dataKey="COLLOID" name="Коллоидная фаза" stroke="#8b5cf6" strokeWidth={4} strokeDasharray="8 4" dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="LP" name="LP (PAC-LV)" stroke="#3b82f6" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="HP" name="HP (PAC-HV)" stroke="#10b981" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="XC" name="XC (Биополимер)" stroke="#f59e0b" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="COLLOID" name="Коллоидная фаза" stroke="#8b5cf6" strokeWidth={6} strokeDasharray="10 5" dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
