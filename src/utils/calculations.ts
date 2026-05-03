@@ -166,6 +166,14 @@ export function calculateMudParameters(inputs: MudInputs): CalculationResults {
     WaterSlurry: 100 - Csh - Cr_slurry,
     viscosity: N,
     filtrationIndex,
-    chartData
+    chartData,
+    materialConsumption: {
+      bentonite: bent * Math.max(0, Vp),
+      weightingAgent: ut_in * Math.max(0, Vp),
+      marble: kolm_in * Math.max(0, Vp),
+      lpPolymer: inputs.lpPolymerConcentration * Math.max(0, Vp),
+      hpPolymer: inputs.hpPolymerConcentration * Math.max(0, Vp),
+      xcPolymer: inputs.xcPolymerConcentration * Math.max(0, Vp),
+    }
   };
 }

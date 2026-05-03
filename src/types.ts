@@ -25,6 +25,7 @@ export interface MudInputs {
   cleaningStages: number; // num19 (num_o)
   mudVolumeInTanks: number; // num20 (value)
   prevIntervalVolume: number; // num21 (value_pre)
+  nextIntervalVolume?: number; 
   lpPolymerConcentration: number;
   hpPolymerConcentration: number;
   xcPolymerConcentration: number;
@@ -34,6 +35,15 @@ export interface MudInputs {
   azimuthStart?: number;
   azimuthEnd?: number;
   surveyPoints?: Array<{ md: number; inclination: number; azimuth: number }>;
+}
+
+export interface MaterialConsumption {
+  bentonite: number;
+  weightingAgent: number;
+  marble: number;
+  lpPolymer: number;
+  hpPolymer: number;
+  xcPolymer: number;
 }
 
 export interface CalculationResults {
@@ -66,4 +76,5 @@ export interface CalculationResults {
   viscosity: number;
   filtrationIndex: number;
   chartData: Array<{ conc: number, LP: number, HP: number, XC: number, COLLOID: number }>;
+  materialConsumption: MaterialConsumption;
 }

@@ -17,7 +17,8 @@ import {
   RefreshCcw,
   XCircle,
   RotateCcw,
-  FileDown
+  FileDown,
+  Layers
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -54,13 +55,15 @@ const InputField = ({
   name, 
   unit, 
   value, 
-  onChange 
+  onChange,
+  placeholder
 }: { 
   label: string, 
   name: keyof MudInputs, 
   unit?: string, 
   value: string, 
-  onChange: (name: keyof MudInputs, value: string) => void 
+  onChange: (name: keyof MudInputs, value: string) => void,
+  placeholder?: string
 }) => (
   <div className="flex flex-col gap-1.5">
     <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</label>
@@ -70,6 +73,7 @@ const InputField = ({
         inputMode="decimal"
         value={value}
         onChange={(e) => onChange(name, e.target.value)}
+        placeholder={placeholder}
         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-300"
       />
       {unit && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">{unit}</span>}
@@ -144,6 +148,7 @@ const DEFAULT_INTERVAL: InputsState = {
   cleaningStages: '4',
   mudVolumeInTanks: '150',
   prevIntervalVolume: '0',
+  nextIntervalVolume: '0',
   lpPolymerConcentration: '5',
   hpPolymerConcentration: '2',
   xcPolymerConcentration: '1',
@@ -160,7 +165,14 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.intervals && Array.isArray(parsed.intervals)) return parsed.intervals;
+        if (parsed.intervals && Array.isArray(parsed.intervals)) {
+          // Migration: add nextIntervalVolume if missing
+          return parsed.intervals.map((inv: any) => ({
+            ...DEFAULT_INTERVAL,
+            ...inv,
+            nextIntervalVolume: inv.nextIntervalVolume || '0'
+          }));
+        }
       } catch (e) { console.error(e); }
     }
     return [DEFAULT_INTERVAL];
@@ -235,7 +247,7 @@ export default function App() {
       id: 'vol',
       title: 'Баланс объемов раствора', 
       icon: <Maximize2 size={18} className="text-amber-500" />,
-      rows: (res: CalculationResults) => [
+      rows: (res: CalculationResults, idx: number) => [
         { id: 'korc', label: 'Толщина корки (мм)', value: res.korc.toFixed(2) },
         { id: 'vk', label: 'Объем корки (м3)', value: res.vk.toFixed(2) },
         { id: 'ff', label: 'Потери на фильтрацию (м3)', value: res.Ff.toFixed(2), color: 'text-red-500' },
@@ -243,15 +255,28 @@ export default function App() {
         { id: 'f_tot', label: 'Общие потери (м3)', value: res.F.toFixed(2), color: 'text-red-600 font-extrabold' },
         { id: 'vkon', label: 'Объем скважины (м3)', value: res.Vkon.toFixed(2) },
         { id: 'vp', label: 'Объем приготовленного (м3)', value: res.Vp.toFixed(2), color: 'text-emerald-600' },
-        { id: 'vper', label: 'К переводу на след. (м3)', value: res.Vper.toFixed(2), color: 'text-blue-600' },
-        { id: 'vprev', label: 'С предыд. интервала (м3)', value: res.value_pre.toFixed(2) }
+        { 
+          id: 'vper', 
+          label: 'К переводу на след. (м3)', 
+          value: (intervals[idx].nextIntervalVolume !== '' 
+            ? (parseFloat(intervals[idx].nextIntervalVolume.replace(',', '.')) || 0) 
+            : res.Vper).toFixed(2), 
+          color: 'text-blue-600' 
+        },
+        { 
+          id: 'vprev', 
+          label: 'С предыд. интервала (м3)', 
+          value: (intervals[idx].prevIntervalVolume !== '' 
+            ? (parseFloat(intervals[idx].prevIntervalVolume.replace(',', '.')) || 0) 
+            : res.value_pre).toFixed(2) 
+        }
       ]
     },
     { 
       id: 'slurry',
       title: 'Фазовый состав шлама', 
       icon: <TrendingUp size={18} className="text-emerald-500" />,
-      rows: (res: CalculationResults) => [
+      rows: (res: CalculationResults, _idx: number) => [
         { id: 'vsh', label: 'Объем шлама (м3)', value: res.csh_volume.toFixed(2) },
         { id: 'msh', label: 'Масса шлама (тонны)', value: res.csh_mass.toFixed(2) },
         { id: 'csh', label: 'Горная фаза в шламе (%)', value: res.Csh.toFixed(2), color: 'text-emerald-600' },
@@ -264,10 +289,34 @@ export default function App() {
       id: 'filt',
       title: 'Расчет фильтрации', 
       icon: <Settings size={18} className="text-purple-500" />,
-      rows: (res: CalculationResults) => [
+      rows: (res: CalculationResults, _idx: number) => [
         { id: 'visc', label: 'Вязкость дисп. среды (мПа·с)', value: (res.viscosity * 1000).toFixed(2) },
         { id: 'find', label: 'Показатель фильтрации', value: res.filtrationIndex.toFixed(2), color: 'text-purple-600 font-extrabold' },
       ]
+    },
+    { 
+      id: 'materials',
+      title: 'Расход компонентов', 
+      icon: <Layers size={18} className="text-green-500" />,
+      rows: (res: CalculationResults, _idx: number) => {
+        const totalConsumption = allResults.reduce((acc, r) => ({
+          bentonite: acc.bentonite + r.materialConsumption.bentonite,
+          marble: acc.marble + r.materialConsumption.marble,
+          weightingAgent: acc.weightingAgent + r.materialConsumption.weightingAgent,
+          lpPolymer: acc.lpPolymer + r.materialConsumption.lpPolymer,
+          hpPolymer: acc.hpPolymer + r.materialConsumption.hpPolymer,
+          xcPolymer: acc.xcPolymer + r.materialConsumption.xcPolymer,
+        }), { bentonite: 0, marble: 0, weightingAgent: 0, lpPolymer: 0, hpPolymer: 0, xcPolymer: 0 });
+
+        return [
+          { id: 'bentonite', label: 'Бентонит (кг)', value: res.materialConsumption.bentonite.toFixed(0), total: totalConsumption.bentonite.toFixed(0) },
+          { id: 'marble', label: 'Кольматант (кг)', value: res.materialConsumption.marble.toFixed(0), total: totalConsumption.marble.toFixed(0) },
+          { id: 'weighting', label: 'Утяжелитель (кг)', value: res.materialConsumption.weightingAgent.toFixed(0), total: totalConsumption.weightingAgent.toFixed(0) },
+          { id: 'lpp', label: 'Низковязкие полимеры (PAC-LV) (кг)', value: res.materialConsumption.lpPolymer.toFixed(1), total: totalConsumption.lpPolymer.toFixed(1) },
+          { id: 'hpp', label: 'Высоковязкие полимеры (PAC_HV) (кг)', value: res.materialConsumption.hpPolymer.toFixed(1), total: totalConsumption.hpPolymer.toFixed(1) },
+          { id: 'xc', label: 'Структурообразователь (XC) (кг)', value: res.materialConsumption.xcPolymer.toFixed(1), total: totalConsumption.xcPolymer.toFixed(1) },
+        ];
+      }
     }
   ], [intervals]);
 
@@ -536,7 +585,12 @@ export default function App() {
       ...lastInterval,
       intervalStart: lastInterval.intervalEnd,
       intervalEnd: (parseFloat(lastInterval.intervalEnd) + 500).toString(),
-      prevIntervalVolume: lastResults.Vper.toFixed(2),
+      prevIntervalVolume: lastInterval.nextIntervalVolume !== '' 
+        ? lastInterval.nextIntervalVolume 
+        : lastResults.Vper.toFixed(2),
+      inclinationStart: lastInterval.inclinationEnd,
+      azimuthStart: lastInterval.azimuthEnd,
+      nextIntervalVolume: '',
     };
     
     setIntervals([...intervals, newInterval]);
@@ -569,31 +623,67 @@ export default function App() {
   }
 
   const allResults = useMemo(() => {
-    return intervals.map(interval => calculateMudParameters(parseSingleInputs(interval)));
+    const calculated: CalculationResults[] = [];
+    for (let i = 0; i < intervals.length; i++) {
+      const interval = intervals[i];
+      const baseInputs = parseSingleInputs(interval);
+      
+      // Determine effective prevIntervalVolume
+      // If empty, it follows the previous interval's effective nextVolume
+      if (interval.prevIntervalVolume === '') {
+        if (i > 0) {
+          const prevEffNext = intervals[i-1].nextIntervalVolume !== '' 
+            ? parseFloat((intervals[i-1].nextIntervalVolume as string).replace(',', '.')) || 0
+            : calculated[i-1].Vper;
+          baseInputs.prevIntervalVolume = prevEffNext;
+        } else {
+          baseInputs.prevIntervalVolume = 0;
+        }
+      }
+      
+      const res = calculateMudParameters(baseInputs);
+      calculated.push(res);
+    }
+    return calculated;
   }, [intervals]);
 
   const results = allResults[activeIntervalIndex] || allResults[0];
   const parsedInputs = useMemo(() => parseSingleInputs(inputs), [inputs]);
 
-  // Handle cross-interval volume synchronization
+  // Handle cross-interval synchronization (Trajectory and Volume)
   useEffect(() => {
     setIntervals(prev => {
       let changed = false;
       const next = [...prev];
       
-      for (let i = 1; i < next.length; i++) {
-        const prevResults = calculateMudParameters(parseSingleInputs(next[i-1]));
-        const expectedVper = prevResults.Vper.toFixed(2);
-        
-        if (next[i].prevIntervalVolume !== expectedVper) {
-          next[i] = { ...next[i], prevIntervalVolume: expectedVper };
+      for (let i = 0; i < next.length - 1; i++) {
+        // Sync Inclination
+        if (next[i+1].inclinationStart !== next[i].inclinationEnd) {
+          next[i+1] = { ...next[i+1], inclinationStart: next[i].inclinationEnd };
+          changed = true;
+        }
+
+        // Sync Azimuth
+        if (next[i+1].azimuthStart !== next[i].azimuthEnd) {
+          next[i+1] = { ...next[i+1], azimuthStart: next[i].azimuthEnd };
+          changed = true;
+        }
+
+        // Sync Volume
+        // Use user override if present (even '0'), otherwise use calculated volume
+        const sourceVol = next[i].nextIntervalVolume !== '' 
+          ? next[i].nextIntervalVolume 
+          : (allResults[i]?.Vper.toFixed(2) || '0.00');
+
+        if (next[i+1].prevIntervalVolume !== sourceVol) {
+          next[i+1] = { ...next[i+1], prevIntervalVolume: sourceVol };
           changed = true;
         }
       }
       
       return changed ? next : prev;
     });
-  }, [allResults]);
+  }, [allResults, intervals.map(inv => inv.inclinationEnd + inv.azimuthEnd + inv.nextIntervalVolume).join(',')]);
 
   // Automatic calculation of weightingAgentConcentration for active interval
   useEffect(() => {
@@ -802,6 +892,12 @@ export default function App() {
                                 <span className="block text-[9px] text-slate-400 font-medium mt-1">{intervals[iIdx].intervalStart}-{intervals[iIdx].intervalEnd} м</span>
                               </th>
                             ))}
+                            {table.id === 'materials' && (
+                              <th className="px-8 py-4 text-center text-xs font-black uppercase tracking-widest text-emerald-600 border-b border-slate-100 min-w-[150px] bg-emerald-50/30">
+                                Итого на скв.
+                                <span className="block text-[9px] text-slate-400 font-medium mt-1">Всего</span>
+                              </th>
+                            )}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 italic font-medium">
@@ -823,14 +919,23 @@ export default function App() {
                                   const row = table.rows(res, iIdx)[rIdx];
                                   return (
                                     <td key={iIdx} className="px-8 py-4 text-center text-base">
-                                      <span className={`px-4 py-2 rounded-xl inline-block min-w-[80px] font-black tracking-tighter ${
-                                        rIdx % 2 === 0 ? 'bg-slate-100 text-slate-700' : 'bg-blue-50 text-blue-600'
-                                      }`}>
-                                        {row.value}
-                                      </span>
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span className={`px-4 py-2 rounded-xl inline-block min-w-[80px] font-black tracking-tighter ${
+                                          rIdx % 2 === 0 ? 'bg-slate-100 text-slate-700' : 'bg-blue-50 text-blue-600'
+                                        }`}>
+                                          {row.value}
+                                        </span>
+                                      </div>
                                     </td>
                                   );
                                 })}
+                                {table.id === 'materials' && (
+                                  <td className="px-8 py-4 text-center text-base bg-emerald-50/20 border-l border-emerald-100">
+                                    <span className="px-4 py-2 rounded-xl inline-block min-w-[80px] font-black tracking-tighter bg-emerald-600 text-white shadow-sm">
+                                      {(table.rows(allResults[0], 0)[rIdx] as any).total}
+                                    </span>
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -859,8 +964,8 @@ export default function App() {
                   <p className="text-slate-400 text-sm font-medium">Конфигурация параметров для текущего интервала бурения</p>
                 </div>
                 <div className="hidden sm:flex flex-col items-end">
-                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1 italic">Объем с пред. секции</p>
-                  <div className="text-xl font-black text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-4">{inputs.prevIntervalVolume} м³</div>
+                  <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1 italic">Объем приг. раствора</p>
+                  <div className="text-xl font-black text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-4">{results.Vp.toFixed(2)} м³</div>
                 </div>
               </div>
 
@@ -906,13 +1011,41 @@ export default function App() {
                 <InputField label="Глинистость разреза" name="cuttingContentOfSection" unit="%" value={inputs.cuttingContentOfSection as string} onChange={handleInputChange as any} />
                 <InputField label="Фильтрационная корка" name="filterCakeThickness" unit="мм" value={inputs.filterCakeThickness as string} onChange={handleInputChange as any} />
                 <InputField label="Ступени очистки" name="cleaningStages" unit="ст." value={inputs.cleaningStages as string} onChange={handleInputChange as any} />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-blue-500 uppercase tracking-wider">Объем приг. раствора</label>
+                  <div className="relative">
+                    <div className="w-full px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 font-bold">
+                      {results.Vp.toFixed(2)}
+                    </div>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-300">м3</span>
+                  </div>
+                </div>
                 <InputField label="Объем в емкостях" name="mudVolumeInTanks" unit="м3" value={inputs.mudVolumeInTanks as string} onChange={handleInputChange as any} />
-                <InputField label="Объем с пред. интервала" name="prevIntervalVolume" unit="м3" value={inputs.prevIntervalVolume as string} onChange={handleInputChange as any} />
+                <InputField 
+                  label="Объем с пред. интервала" 
+                  name="prevIntervalVolume" 
+                  unit="м3" 
+                  value={inputs.prevIntervalVolume as string} 
+                  onChange={handleInputChange as any} 
+                  placeholder={activeIntervalIndex > 0 ? (
+                    intervals[activeIntervalIndex-1].nextIntervalVolume !== '' 
+                      ? intervals[activeIntervalIndex-1].nextIntervalVolume 
+                      : (allResults[activeIntervalIndex-1]?.Vper.toFixed(2) || '0.00')
+                  ) : '0.00'}
+                />
+                <InputField 
+                  label="Объем, переведенный на след. интервал" 
+                  name="nextIntervalVolume" 
+                  unit="м3" 
+                  value={inputs.nextIntervalVolume as string} 
+                  onChange={handleInputChange as any} 
+                  placeholder={results.Vper.toFixed(2)}
+                />
               </InputGroup>
 
               <InputGroup title="Концентрации полимеров" id="polymers" expandedSection={expandedSection} onToggle={handleToggleSection}>
-                <InputField label="Низковязкий (PAC-LV)" name="lpPolymerConcentration" unit="кг/м3" value={inputs.lpPolymerConcentration as string} onChange={handleInputChange as any} />
-                <InputField label="Высоковязкий (PAC-HV)" name="hpPolymerConcentration" unit="кг/м3" value={inputs.hpPolymerConcentration as string} onChange={handleInputChange as any} />
+                <InputField label="Низковязкие полимеры (PAC-LV)" name="lpPolymerConcentration" unit="кг/м3" value={inputs.lpPolymerConcentration as string} onChange={handleInputChange as any} />
+                <InputField label="Высоковязкие полимеры (PAC_HV)" name="hpPolymerConcentration" unit="кг/м3" value={inputs.hpPolymerConcentration as string} onChange={handleInputChange as any} />
                 <InputField label="Структурообразователь (XC)" name="xcPolymerConcentration" unit="кг/м3" value={inputs.xcPolymerConcentration as string} onChange={handleInputChange as any} />
               </InputGroup>
 
@@ -1184,6 +1317,47 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+
+                {/* Materials Consumption Table */}
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm lg:col-span-1">
+                  <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                       <Layers size={18} className="text-green-500" />
+                       <h3 className="font-bold text-slate-800">Расход компонентов</h3>
+                    </div>
+                    {hasHiddenInTable('materials') && (
+                      <button onClick={() => restoreTable('materials')} className="text-green-500 hover:text-green-600 transition-colors" title="Восстановить таблицу">
+                        <RotateCcw size={18} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="px-6 py-2 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <span>Компонент</span>
+                    <div className="flex gap-8">
+                       <span className="w-20 text-right">На инт.</span>
+                       <span className="w-24 text-right">Всего на скв.</span>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {tableConfigs[4].rows(results, activeIntervalIndex).map((row, index) => !hiddenRows.has(`materials_${row.id}`) && (
+                      <div key={row.id} className={`px-6 py-3.5 flex justify-between items-center group relative ${index % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={() => toggleRow(`materials_${row.id}`)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all"
+                          >
+                            <XCircle size={14} />
+                          </button>
+                          <span className="text-sm text-slate-600 font-medium">{row.label}</span>
+                        </div>
+                        <div className="flex gap-8">
+                          <span className="w-20 text-right font-bold text-slate-900">{row.value}</span>
+                          <span className="w-24 text-right font-black text-green-600 italic">{row.total}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -1357,9 +1531,9 @@ export default function App() {
                         iconType="line"
                         formatter={(value) => <span className="text-slate-700 font-extrabold text-xs uppercase tracking-widest px-2">{value}</span>}
                       />
-                      <Line type="monotone" dataKey="LP" name="LP (PAC-LV)" stroke="#3b82f6" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
-                      <Line type="monotone" dataKey="HP" name="HP (PAC-HV)" stroke="#10b981" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
-                      <Line type="monotone" dataKey="XC" name="XC (Биополимер)" stroke="#f59e0b" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="LP" name="Низковязкие полимеры (PAC-LV)" stroke="#3b82f6" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="HP" name="Высоковязкие полимеры (PAC_HV)" stroke="#10b981" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                      <Line type="monotone" dataKey="XC" name="Структурообразователь (XC)" stroke="#f59e0b" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
                       <Line type="monotone" dataKey="COLLOID" name="Коллоидная фаза" stroke="#8b5cf6" strokeWidth={6} strokeDasharray="10 5" dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
                     </LineChart>
                   </ResponsiveContainer>
