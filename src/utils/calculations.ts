@@ -6,29 +6,27 @@
 import { MudInputs, CalculationResults } from '../types';
 
 export function calculateMudParameters(inputs: MudInputs): CalculationResults {
-  const {
-    prevCasingInternalDiameter: d1,
-    nextCasingInternalDiameter: d2,
-    bitDiameter: bit,
-    washoutCoefficient: kav,
-    bentoniteConcentration: bent,
-    weightingAgentConcentration: ut_in,
-    marbleConcentration: kolm_in,
-    weightingAgentDensity: put_in,
-    bentoniteColloidalContent: kolb_in,
-    rockPorosity: por,
-    cuttingContentOfSection: glin,
-    dispersionMediumDensity: disp,
-    isWeighted: rut,
-    filterCakeThickness: korc_in,
-    intervalStart: start,
-    intervalEnd: fin,
-    unweightedDensity: dens,
-    weightedDensity: densu,
-    cleaningStages: num_o,
-    mudVolumeInTanks: value,
-    prevIntervalVolume: value_pre_in,
-  } = inputs;
+  const d1 = inputs.prevCasingInternalDiameter;
+  const d2 = inputs.nextCasingInternalDiameter;
+  const bit = inputs.bitDiameter;
+  const kav = inputs.washoutCoefficient;
+  const bent = inputs.bentoniteConcentration;
+  const rut = inputs.isWeighted;
+  const ut_in = rut ? inputs.weightingAgentConcentration : 0;
+  const kolm_in = inputs.marbleConcentration;
+  const put_in = inputs.weightingAgentDensity;
+  const kolb_in = inputs.bentoniteColloidalContent;
+  const por = inputs.rockPorosity;
+  const glin = inputs.cuttingContentOfSection;
+  const disp = inputs.dispersionMediumDensity;
+  const korc_in = inputs.filterCakeThickness;
+  const start = inputs.intervalStart;
+  const fin = inputs.intervalEnd;
+  const dens = inputs.unweightedDensity;
+  const densu = inputs.weightedDensity;
+  const num_o = inputs.cleaningStages;
+  const value = inputs.mudVolumeInTanks;
+  const value_pre_in = inputs.prevIntervalVolume;
 
   const bit_m = bit * 0.001;
   const d1_m = d2 * 0.001;
@@ -119,6 +117,12 @@ export function calculateMudParameters(inputs: MudInputs): CalculationResults {
   const commonNum = 1800 * 1000000 * 0.00563 * (0.0000000000000000453 / ccol) * 101325;
   const filtrationIndex = commonNum / (N * 0.001 * korc);
 
+  // Check for solids overflow (no room for cuttings)
+  // bent/26 + kolm_in/26 + ut_in/(put_in*10) are volume percentages
+  const totalSolidVolumePercentageInput = (bent / 26) + (kolm_in / 26) + (ut_in / (put_in * 10));
+  // octf is the required total solid volume percentage for target density (dens or densu)
+  const hasSolidsOverflow = totalSolidVolumePercentageInput >= octf || cshp < 0 || Csh < 0;
+
   const chartData = Array.from({ length: 20 }, (_, i) => {
     const conc = i + 1;
     
@@ -166,6 +170,7 @@ export function calculateMudParameters(inputs: MudInputs): CalculationResults {
     WaterSlurry: 100 - Csh - Cr_slurry,
     viscosity: N,
     filtrationIndex,
+    hasSolidsOverflow,
     chartData,
     materialConsumption: {
       bentonite: bent * Math.max(0, Vp),

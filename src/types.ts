@@ -26,6 +26,7 @@ export interface MudInputs {
   mudVolumeInTanks: number; // num20 (value)
   prevIntervalVolume: number; // num21 (value_pre)
   nextIntervalVolume?: number; 
+  isNextVolumeOverridden?: boolean;
   lpPolymerConcentration: number;
   hpPolymerConcentration: number;
   xcPolymerConcentration: number;
@@ -75,6 +76,7 @@ export interface CalculationResults {
 
   viscosity: number;
   filtrationIndex: number;
+  hasSolidsOverflow: boolean;
   chartData: Array<{ conc: number, LP: number, HP: number, XC: number, COLLOID: number }>;
   materialConsumption: MaterialConsumption;
 }

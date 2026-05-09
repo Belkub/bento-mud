@@ -128,7 +128,7 @@ const STORAGE_KEY = 'bentomud_pro_state';
 
 const DEFAULT_INTERVAL: InputsState = {
   prevCasingInternalDiameter: '245',
-  nextCasingInternalDiameter: '178',
+  nextCasingInternalDiameter: '',
   bitDiameter: '215.9',
   washoutCoefficient: '1.15',
   bentoniteConcentration: '25',
@@ -149,6 +149,7 @@ const DEFAULT_INTERVAL: InputsState = {
   mudVolumeInTanks: '150',
   prevIntervalVolume: '0',
   nextIntervalVolume: '0',
+  isNextVolumeOverridden: false,
   lpPolymerConcentration: '5',
   hpPolymerConcentration: '2',
   xcPolymerConcentration: '1',
@@ -170,7 +171,8 @@ export default function App() {
           return parsed.intervals.map((inv: any) => ({
             ...DEFAULT_INTERVAL,
             ...inv,
-            nextIntervalVolume: inv.nextIntervalVolume || '0'
+            nextIntervalVolume: inv.nextIntervalVolume || '0',
+            isNextVolumeOverridden: inv.isNextVolumeOverridden ?? false
           }));
         }
       } catch (e) { console.error(e); }
@@ -236,7 +238,7 @@ export default function App() {
         { id: 'cbent', label: 'Достаточная конц. бентонита (кг/м3)', value: res.cbent.toFixed(0) },
         { id: 'ccolr', label: 'Конц. коллоидной фазы (кг/м3)', value: res.ccolr.toFixed(2) },
         { id: 'ccol', label: 'Конц. коллоидной фазы (%)', value: res.ccol.toFixed(2) },
-        { id: 'cshp', label: 'Конц. шлама в растворе (%)', value: res.cshp.toFixed(2) },
+        { id: 'cshp', label: 'Конц. шлама в растворе (%)', value: res.cshp.toFixed(2), color: res.cshp < 0 ? 'text-red-600 font-black' : '' },
         { id: 'kolm', label: 'Конц. кольматанта (кг/м3)', value: res.kolm.toFixed(1) },
         { id: 'ut_kg', label: 'Конц. утяжелителя (кг/м3)', value: parseFloat(intervals[idx].weightingAgentConcentration).toFixed(2) },
         { id: 'ut_perc', label: 'Конц. утяжелителя (%)', value: res.icup.toFixed(2) },
@@ -279,7 +281,7 @@ export default function App() {
       rows: (res: CalculationResults, _idx: number) => [
         { id: 'vsh', label: 'Объем шлама (м3)', value: res.csh_volume.toFixed(2) },
         { id: 'msh', label: 'Масса шлама (тонны)', value: res.csh_mass.toFixed(2) },
-        { id: 'csh', label: 'Горная фаза в шламе (%)', value: res.Csh.toFixed(2), color: 'text-emerald-600' },
+        { id: 'csh', label: 'Горная фаза в шламе (%)', value: res.Csh.toFixed(2), color: res.Csh < 0 ? 'text-red-600 font-black' : 'text-emerald-600' },
         { id: 'cr', label: 'Твердая фаза раствора (%)', value: res.Cr.toFixed(2) },
         { id: 'ctot', label: 'Общая тв. фаза в шламе (%)', value: (res.Csh + res.Cr).toFixed(2), color: 'text-slate-900 font-extrabold' },
         { id: 'cw', label: 'Водная фаза в шламе (%)', value: res.WaterSlurry.toFixed(2), color: 'text-blue-500' }
@@ -571,7 +573,8 @@ export default function App() {
       const next = [...prev];
       next[activeIntervalIndex] = {
         ...next[activeIntervalIndex],
-        [name]: value
+        [name]: value,
+        ...(name === 'nextIntervalVolume' ? { isNextVolumeOverridden: true } : {})
       };
       return next;
     });
@@ -590,7 +593,10 @@ export default function App() {
         : lastResults.Vper.toFixed(2),
       inclinationStart: lastInterval.inclinationEnd,
       azimuthStart: lastInterval.azimuthEnd,
+      prevCasingInternalDiameter: lastInterval.nextCasingInternalDiameter,
+      nextCasingInternalDiameter: '',
       nextIntervalVolume: '',
+      isNextVolumeOverridden: false,
     };
     
     setIntervals([...intervals, newInterval]);
@@ -650,40 +656,61 @@ export default function App() {
   const results = allResults[activeIntervalIndex] || allResults[0];
   const parsedInputs = useMemo(() => parseSingleInputs(inputs), [inputs]);
 
-  // Handle cross-interval synchronization (Trajectory and Volume)
+  // Handle cross-interval synchronization (Trajectory, Volume and Casing)
   useEffect(() => {
     setIntervals(prev => {
       let changed = false;
       const next = [...prev];
       
-      for (let i = 0; i < next.length - 1; i++) {
-        // Sync Inclination
-        if (next[i+1].inclinationStart !== next[i].inclinationEnd) {
-          next[i+1] = { ...next[i+1], inclinationStart: next[i].inclinationEnd };
-          changed = true;
+      for (let i = 0; i < next.length; i++) {
+        // Trajectory sync (requires i+1)
+        if (i < next.length - 1) {
+          // Sync Inclination
+          if (next[i+1].inclinationStart !== next[i].inclinationEnd) {
+            next[i+1] = { ...next[i+1], inclinationStart: next[i].inclinationEnd };
+            changed = true;
+          }
+
+          // Sync Azimuth
+          if (next[i+1].azimuthStart !== next[i].azimuthEnd) {
+            next[i+1] = { ...next[i+1], azimuthStart: next[i].azimuthEnd };
+            changed = true;
+          }
+
+          // Sync Casing Diameter
+          // Fill automatically if empty (to satisfy "filled automatically but available for correction")
+          if (next[i+1].prevCasingInternalDiameter === '' && next[i].nextCasingInternalDiameter !== '') {
+            next[i+1] = { ...next[i+1], prevCasingInternalDiameter: next[i].nextCasingInternalDiameter };
+            changed = true;
+          }
         }
 
-        // Sync Azimuth
-        if (next[i+1].azimuthStart !== next[i].azimuthEnd) {
-          next[i+1] = { ...next[i+1], azimuthStart: next[i].azimuthEnd };
-          changed = true;
+        // Auto-fill nextIntervalVolume only if not overridden by user
+        if (!next[i].isNextVolumeOverridden && allResults[i]) {
+          const calcVol = allResults[i].Vper.toFixed(2);
+          if (next[i].nextIntervalVolume !== calcVol) {
+            next[i] = { ...next[i], nextIntervalVolume: calcVol };
+            changed = true;
+          }
         }
 
-        // Sync Volume
-        // Use user override if present (even '0'), otherwise use calculated volume
-        const sourceVol = next[i].nextIntervalVolume !== '' 
-          ? next[i].nextIntervalVolume 
-          : (allResults[i]?.Vper.toFixed(2) || '0.00');
+        // Sync Volume to next interval
+        if (i < next.length - 1) {
+          // Use user override if present (even '0'), otherwise use calculated volume
+          const sourceVol = next[i].nextIntervalVolume !== '' 
+            ? next[i].nextIntervalVolume 
+            : (allResults[i]?.Vper.toFixed(2) || '0.00');
 
-        if (next[i+1].prevIntervalVolume !== sourceVol) {
-          next[i+1] = { ...next[i+1], prevIntervalVolume: sourceVol };
-          changed = true;
+          if (next[i+1].prevIntervalVolume !== sourceVol) {
+            next[i+1] = { ...next[i+1], prevIntervalVolume: sourceVol };
+            changed = true;
+          }
         }
       }
       
       return changed ? next : prev;
     });
-  }, [allResults, intervals.map(inv => inv.inclinationEnd + inv.azimuthEnd + inv.nextIntervalVolume).join(',')]);
+  }, [allResults, intervals.map(inv => inv.inclinationEnd + inv.azimuthEnd + inv.nextIntervalVolume + inv.nextCasingInternalDiameter + inv.isNextVolumeOverridden).join(',')]);
 
   // Automatic calculation of weightingAgentConcentration for active interval
   useEffect(() => {
@@ -703,8 +730,12 @@ export default function App() {
           handleInputChange('weightingAgentConcentration', icuStr);
         }
       }
+    } else {
+      if (inputs.weightingAgentConcentration !== '0') {
+        handleInputChange('weightingAgentConcentration', '0');
+      }
     }
-  }, [inputs.isWeighted, inputs.unweightedDensity, inputs.weightedDensity, inputs.weightingAgentDensity, activeIntervalIndex]);
+  }, [inputs.isWeighted, inputs.unweightedDensity, inputs.weightedDensity, inputs.weightingAgentDensity, activeIntervalIndex, inputs.weightingAgentConcentration]);
 
   const mudCompositionData = useMemo(() => [
     { name: 'Коллоидяа фаза', value: Math.abs(results.ccol) },
@@ -816,6 +847,21 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
+        {results.hasSolidsOverflow && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-8 p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-center gap-5 shadow-lg shadow-red-100/50"
+          >
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center shrink-0">
+              <XCircle className="text-red-600 animate-bounce" size={24} />
+            </div>
+            <div>
+              <h3 className="font-black uppercase tracking-tighter text-red-900 leading-tight">Нет места для шлама!</h3>
+              <p className="text-xs font-bold text-red-700/80 mt-0.5">Необходима коррекция введенных данных, так как концентрация твердофазных компонентов слишком высокая.</p>
+            </div>
+          </motion.div>
+        )}
         <AnimatePresence mode="wait">
           {activeTab === 'summary' && (
             <motion.div
@@ -1064,11 +1110,23 @@ export default function App() {
                         // Suggest a depth in the middle of current interval if it's the first point
                         const start = parseFloat(inputs.intervalStart.replace(',', '.'));
                         const end = parseFloat(inputs.intervalEnd.replace(',', '.'));
-                        const suggestMD = (start + (end - start) / 2).toString();
+                        
+                        let suggestMDVal = start + (end - start) / 2;
+                        if (nextPoints.length > 0) {
+                          const lastPt = nextPoints[nextPoints.length - 1];
+                          const lastMd = parseFloat(lastPt.md.replace(',', '.'));
+                          if (!isNaN(lastMd)) {
+                            // If we already have points, suggest 10m further if possible, or halfway to the end
+                            suggestMDVal = Math.min(end, lastMd + 10);
+                            if (suggestMDVal === lastMd && lastMd < end) {
+                               suggestMDVal = (lastMd + end) / 2;
+                            }
+                          }
+                        }
+                        
+                        const suggestMD = suggestMDVal.toFixed(1).replace('.', ',');
                         
                         nextPoints.push({ md: suggestMD, inclination: '0', azimuth: '0' });
-                        // Sort by MD
-                        nextPoints.sort((a, b) => parseFloat(a.md) - parseFloat(b.md));
                         handleInputChange('surveyPoints' as any, nextPoints);
                       }}
                       className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all flex items-center gap-2"
@@ -1219,7 +1277,7 @@ export default function App() {
                           </button>
                           <span className="text-sm text-slate-600 font-medium">{row.label}</span>
                         </div>
-                        <span className={`font-bold ${row.highlight ? 'text-blue-600' : ''}`}>{row.value}</span>
+                        <span className={`font-bold ${row.color || (row.highlight ? 'text-blue-600' : '')}`}>{row.value}</span>
                       </div>
                     ))}
                   </div>
@@ -1334,8 +1392,7 @@ export default function App() {
                   <div className="px-6 py-2 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <span>Компонент</span>
                     <div className="flex gap-8">
-                       <span className="w-20 text-right">На инт.</span>
-                       <span className="w-24 text-right">Всего на скв.</span>
+                       <span className="w-24 text-right">Расход на интервал</span>
                     </div>
                   </div>
                   <div className="divide-y divide-slate-100">
@@ -1351,8 +1408,7 @@ export default function App() {
                           <span className="text-sm text-slate-600 font-medium">{row.label}</span>
                         </div>
                         <div className="flex gap-8">
-                          <span className="w-20 text-right font-bold text-slate-900">{row.value}</span>
-                          <span className="w-24 text-right font-black text-green-600 italic">{row.total}</span>
+                          <span className="w-24 text-right font-bold text-slate-900">{row.value}</span>
                         </div>
                       </div>
                     ))}
