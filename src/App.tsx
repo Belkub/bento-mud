@@ -18,7 +18,11 @@ import {
   XCircle,
   RotateCcw,
   FileDown,
-  Layers
+  Layers,
+  Droplets,
+  LayoutGrid,
+  Navigation,
+  Menu
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -779,67 +783,49 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-              <Calculator size={24} strokeWidth={2.5} />
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1.5 sm:px-6 sm:py-4">
+        <div className="max-w-7xl mx-auto flex flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-7 h-7 sm:w-10 sm:h-10 bg-blue-600 rounded-lg sm:rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200 shrink-0">
+              <Calculator size={18} strokeWidth={2.5} />
             </div>
-            <div>
-              <h1 className="font-bold text-xl tracking-tight leading-none">BentoMud Pro</h1>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1.5">Multi-Interval Engineering System</p>
+            <div className="flex flex-col">
+              <h1 className="font-bold text-sm sm:text-xl tracking-tight leading-none">BentoMud Pro</h1>
+              <p className="hidden sm:block text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1.5">Multi-Interval Engineering</p>
             </div>
           </div>
           
-          <div className="flex flex-col gap-3">
-            <nav className="flex bg-slate-100 p-1 rounded-xl self-end">
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 shrink-0">
+            <nav className="flex bg-slate-100 p-0.5 rounded-lg overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none">
               {(['inputs', 'results', 'charts', 'summary'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-4 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${
+                  className={`px-2 sm:px-6 py-1 sm:py-2 rounded-md sm:rounded-lg text-[8px] sm:text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                     activeTab === tab 
-                      ? 'bg-white text-blue-600 shadow-sm translate-y-[-1px]' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  {tab === 'inputs' ? 'Параметры' : tab === 'results' ? 'Результат' : tab === 'charts' ? 'Графики' : 'Итоговая сводка'}
+                  {tab === 'inputs' ? 'Парам.' : tab === 'results' ? 'Рез-т' : tab === 'charts' ? 'Граф.' : 'Сводка'}
                 </button>
               ))}
             </nav>
 
-            {/* Interval Selection Strip */}
             {activeTab !== 'summary' && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar self-end">
-                {intervals.map((_, idx) => (
-                  <div key={idx} className="flex relative group">
-                    <button
-                      onClick={() => setActiveIntervalIndex(idx)}
-                      className={`whitespace-nowrap px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter border-2 transition-all ${
-                        activeIntervalIndex === idx
-                          ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-105'
-                          : 'bg-white border-slate-200 text-slate-500 hover:border-blue-400'
-                      }`}
-                    >
-                      Инт. {idx + 1}
-                    </button>
-                    {intervals.length > 1 && (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); removeInterval(idx); }}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
-                      >
-                        <XCircle size={12} />
-                      </button>
-                    )}
-                  </div>
+              <div className="hidden xs:flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {intervals.slice(0, 3).map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveIntervalIndex(idx)}
+                    className={`px-2 py-1 rounded-md text-[8px] font-black uppercase border transition-all ${
+                      activeIntervalIndex === idx ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-500'
+                    }`}
+                  >
+                    И{idx + 1}
+                  </button>
                 ))}
-                <button
-                  onClick={addInterval}
-                  className="whitespace-nowrap px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter border-2 border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-1.5 bg-white bg-opacity-50"
-                >
-                  <RefreshCcw size={10} className="rotate-45" />
-                  Добавить интервал?
-                </button>
+                {intervals.length > 3 && <span className="text-[8px] font-bold text-slate-400">...</span>}
               </div>
             )}
           </div>
@@ -1428,9 +1414,9 @@ export default function App() {
             >
               {/* Pie Charts */}
               <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-2 sm:mb-4">
                   <Database size={20} className="text-blue-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-base sm:text-lg">Фазовый состав раствора (%)</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-sm sm:text-lg">Фазовый состав (%)</h3>
                 </div>
                 <div className="w-full h-[280px] sm:h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1438,9 +1424,9 @@ export default function App() {
                       <Pie
                         data={mudCompositionData}
                         cx="50%"
-                        cy="50%"
-                        innerRadius="50%"
-                        outerRadius="80%"
+                        cy="38%"
+                        innerRadius="35%"
+                        outerRadius="60%"
                         paddingAngle={4}
                         dataKey="value"
                         animationBegin={0}
@@ -1451,13 +1437,13 @@ export default function App() {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '10px' }}
                       />
                       <Legend 
                         verticalAlign="bottom" 
-                        height={40} 
+                        height={100} 
                         iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-bold text-[10px] sm:text-xs uppercase tracking-tight">{value}</span>}
+                        formatter={(value) => <span className="text-slate-600 font-bold text-[7px] sm:text-xs uppercase tracking-tight">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1465,9 +1451,9 @@ export default function App() {
               </div>
 
               <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-2 sm:mb-4">
                   <Maximize2 size={20} className="text-amber-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-base sm:text-lg">Баланс объемов (%)</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-sm sm:text-lg">Баланс объемов (%)</h3>
                 </div>
                 <div className="w-full h-[280px] sm:h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1475,9 +1461,9 @@ export default function App() {
                       <Pie
                         data={volumeBalanceData}
                         cx="50%"
-                        cy="50%"
-                        innerRadius="50%"
-                        outerRadius="80%"
+                        cy="38%"
+                        innerRadius="35%"
+                        outerRadius="60%"
                         paddingAngle={4}
                         dataKey="value"
                         animationBegin={200}
@@ -1488,13 +1474,13 @@ export default function App() {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '10px' }}
                       />
                       <Legend 
                         verticalAlign="bottom" 
-                        height={40} 
+                        height={100} 
                         iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-bold text-[10px] sm:text-xs uppercase tracking-tight">{value}</span>}
+                        formatter={(value) => <span className="text-slate-600 font-bold text-[7px] sm:text-xs uppercase tracking-tight">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1502,9 +1488,9 @@ export default function App() {
               </div>
 
               <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-2 sm:mb-4">
                   <TrendingUp size={20} className="text-emerald-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-base sm:text-lg">Состав шлама (%)</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-sm sm:text-lg">Состав шлама (%)</h3>
                 </div>
                 <div className="w-full h-[280px] sm:h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1512,9 +1498,9 @@ export default function App() {
                       <Pie
                         data={slurryCompositionData}
                         cx="50%"
-                        cy="50%"
-                        innerRadius="50%"
-                        outerRadius="80%"
+                        cy="38%"
+                        innerRadius="35%"
+                        outerRadius="60%"
                         paddingAngle={4}
                         dataKey="value"
                         animationBegin={400}
@@ -1525,13 +1511,13 @@ export default function App() {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '10px' }}
                       />
                       <Legend 
                         verticalAlign="bottom" 
-                        height={40} 
+                        height={100} 
                         iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-bold text-[10px] sm:text-xs uppercase tracking-tight">{value}</span>}
+                        formatter={(value) => <span className="text-slate-600 font-bold text-[7px] sm:text-xs uppercase tracking-tight">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1540,52 +1526,52 @@ export default function App() {
 
               {/* Filtration Graph */}
               <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center col-span-1 md:col-span-2">
-                <div className="flex items-center gap-2 mb-4 sm:mb-8">
+                <div className="flex items-center gap-2 mb-2 sm:mb-8">
                   <Settings size={22} className="text-purple-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-lg sm:text-xl">Концентрационная диаграмма фильтрации</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-sm sm:text-xl">Концентрационная диаграмма</h3>
                 </div>
                 <div className="w-full h-[320px] sm:h-[450px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={results.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 50 }}>
+                    <LineChart data={results.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 40 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis 
                         dataKey="conc" 
                         stroke="#94a3b8"
-                        fontSize={10}
+                        fontSize={8}
                         fontWeight={700}
-                        tick={{ dy: 10 }}
+                        tick={{ dy: 5 }}
                         label={{ 
-                          value: 'Концентрация добавки', 
+                          value: 'Концентрация', 
                           position: 'bottom', 
-                          offset: 25,
-                          fontSize: 10,
+                          offset: 20,
+                          fontSize: 8,
                           fontWeight: 800,
                           fill: '#64748b'
                         }}
                       />
                       <YAxis 
                         stroke="#94a3b8"
-                        fontSize={10}
+                        fontSize={8}
                         fontWeight={700}
                         label={{ 
-                          value: 'Фильтрация', 
+                          value: 'Фильтр.', 
                           angle: -90, 
                           position: 'insideLeft', 
-                          offset: 10,
-                          fontSize: 10,
+                          offset: 15,
+                          fontSize: 8,
                           fontWeight: 800,
                           fill: '#64748b'
                         }}
                       />
                       <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)', padding: '12px' }}
-                        itemStyle={{ fontWeight: 700, fontSize: '11px' }}
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)', padding: '8px' }}
+                        itemStyle={{ fontWeight: 700, fontSize: '10px' }}
                       />
                       <Legend 
                         verticalAlign="top" 
-                        height={60}
+                        height={70}
                         iconType="line"
-                        formatter={(value) => <span className="text-slate-700 font-extrabold text-[9px] sm:text-[10px] uppercase tracking-wider px-1">{value}</span>}
+                        formatter={(value) => <span className="text-slate-700 font-extrabold text-[7px] sm:text-[9px] uppercase tracking-wider px-1">{value}</span>}
                       />
                       <Line type="monotone" dataKey="LP" name="Низковязкие полимеры (PAC-LV)" stroke="#3b82f6" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
                       <Line type="monotone" dataKey="HP" name="Высоковязкие полимеры (PAC_HV)" stroke="#10b981" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
