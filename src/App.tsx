@@ -16,6 +16,7 @@ import {
   Maximize2,
   RefreshCcw,
   XCircle,
+  Plus,
   RotateCcw,
   FileDown,
   Layers,
@@ -813,19 +814,36 @@ export default function App() {
             </nav>
 
             {activeTab !== 'summary' && (
-              <div className="hidden xs:flex items-center gap-1 overflow-x-auto no-scrollbar">
-                {intervals.slice(0, 3).map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveIntervalIndex(idx)}
-                    className={`px-2 py-1 rounded-md text-[8px] font-black uppercase border transition-all ${
-                      activeIntervalIndex === idx ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-500'
-                    }`}
-                  >
-                    И{idx + 1}
-                  </button>
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[140px] sm:max-w-none py-1 px-1">
+                {intervals.map((_, idx) => (
+                  <div key={idx} className="relative group shrink-0">
+                    <button
+                      onClick={() => setActiveIntervalIndex(idx)}
+                      className={`px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase border-2 transition-all ${
+                        activeIntervalIndex === idx 
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-blue-400'
+                      }`}
+                    >
+                      И{idx + 1}
+                    </button>
+                    {intervals.length > 1 && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); removeInterval(idx); }}
+                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
+                      >
+                        <XCircle size={10} />
+                      </button>
+                    )}
+                  </div>
                 ))}
-                {intervals.length > 3 && <span className="text-[8px] font-bold text-slate-400">...</span>}
+                <button
+                  onClick={addInterval}
+                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-blue-600 border-2 border-dashed border-blue-300 bg-white hover:bg-blue-50 transition-all ml-1"
+                  title="Добавить интервал"
+                >
+                  <Plus size={14} strokeWidth={3} />
+                </button>
               </div>
             )}
           </div>
