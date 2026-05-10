@@ -846,7 +846,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-4 sm:p-6">
         {results.hasSolidsOverflow && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1427,20 +1427,20 @@ export default function App() {
               className="grid grid-cols-1 md:grid-cols-2 gap-8"
             >
               {/* Pie Charts */}
-              <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
+                <div className="flex items-center gap-2 mb-4">
                   <Database size={20} className="text-blue-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-lg">Фазовый состав раствора (%)</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-base sm:text-lg">Фазовый состав раствора (%)</h3>
                 </div>
-                <div className="w-full h-[350px]">
+                <div className="w-full h-[280px] sm:h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={mudCompositionData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={70}
-                        outerRadius={110}
+                        innerRadius="50%"
+                        outerRadius="80%"
                         paddingAngle={4}
                         dataKey="value"
                         animationBegin={0}
@@ -1457,27 +1457,27 @@ export default function App() {
                         verticalAlign="bottom" 
                         height={40} 
                         iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-bold text-xs uppercase tracking-tight">{value}</span>}
+                        formatter={(value) => <span className="text-slate-600 font-bold text-[10px] sm:text-xs uppercase tracking-tight">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
+                <div className="flex items-center gap-2 mb-4">
                   <Maximize2 size={20} className="text-amber-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-lg">Баланс объемов (%)</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-base sm:text-lg">Баланс объемов (%)</h3>
                 </div>
-                <div className="w-full h-[350px]">
+                <div className="w-full h-[280px] sm:h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={volumeBalanceData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={70}
-                        outerRadius={110}
+                        innerRadius="50%"
+                        outerRadius="80%"
                         paddingAngle={4}
                         dataKey="value"
                         animationBegin={200}
@@ -1494,27 +1494,27 @@ export default function App() {
                         verticalAlign="bottom" 
                         height={40} 
                         iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-bold text-xs uppercase tracking-tight">{value}</span>}
+                        formatter={(value) => <span className="text-slate-600 font-bold text-[10px] sm:text-xs uppercase tracking-tight">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
+                <div className="flex items-center gap-2 mb-4">
                   <TrendingUp size={20} className="text-emerald-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-lg">Состав шлама (%)</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-base sm:text-lg">Состав шлама (%)</h3>
                 </div>
-                <div className="w-full h-[350px]">
+                <div className="w-full h-[280px] sm:h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={slurryCompositionData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={70}
-                        outerRadius={110}
+                        innerRadius="50%"
+                        outerRadius="80%"
                         paddingAngle={4}
                         dataKey="value"
                         animationBegin={400}
@@ -1531,7 +1531,7 @@ export default function App() {
                         verticalAlign="bottom" 
                         height={40} 
                         iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-bold text-xs uppercase tracking-tight">{value}</span>}
+                        formatter={(value) => <span className="text-slate-600 font-bold text-[10px] sm:text-xs uppercase tracking-tight">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1539,53 +1539,53 @@ export default function App() {
               </div>
 
               {/* Filtration Graph */}
-              <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center col-span-1 md:col-span-2">
-                <div className="flex items-center gap-2 mb-8">
+              <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center col-span-1 md:col-span-2">
+                <div className="flex items-center gap-2 mb-4 sm:mb-8">
                   <Settings size={22} className="text-purple-500" />
-                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-xl">Концентрационная диаграмма фильтрации</h3>
+                  <h3 className="font-black text-slate-800 text-center uppercase tracking-tighter text-lg sm:text-xl">Концентрационная диаграмма фильтрации</h3>
                 </div>
-                <div className="w-full h-[450px]">
+                <div className="w-full h-[320px] sm:h-[450px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={results.chartData} margin={{ top: 10, right: 30, left: 20, bottom: 40 }}>
+                    <LineChart data={results.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 50 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis 
                         dataKey="conc" 
                         stroke="#94a3b8"
-                        fontSize={11}
+                        fontSize={10}
                         fontWeight={700}
                         tick={{ dy: 10 }}
                         label={{ 
-                          value: 'Концентрация добавки (кг/м³, x0.2 для коллоида)', 
+                          value: 'Концентрация добавки', 
                           position: 'bottom', 
-                          offset: 20,
-                          fontSize: 13,
+                          offset: 25,
+                          fontSize: 10,
                           fontWeight: 800,
                           fill: '#64748b'
                         }}
                       />
                       <YAxis 
                         stroke="#94a3b8"
-                        fontSize={11}
+                        fontSize={10}
                         fontWeight={700}
                         label={{ 
-                          value: 'Показатель фильтрации (см³/30мин)', 
+                          value: 'Фильтрация', 
                           angle: -90, 
                           position: 'insideLeft', 
-                          offset: -10,
-                          fontSize: 13,
+                          offset: 10,
+                          fontSize: 10,
                           fontWeight: 800,
                           fill: '#64748b'
                         }}
                       />
                       <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)', padding: '16px' }}
-                        itemStyle={{ fontWeight: 700, fontSize: '13px' }}
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)', padding: '12px' }}
+                        itemStyle={{ fontWeight: 700, fontSize: '11px' }}
                       />
                       <Legend 
                         verticalAlign="top" 
-                        height={50}
+                        height={60}
                         iconType="line"
-                        formatter={(value) => <span className="text-slate-700 font-extrabold text-xs uppercase tracking-widest px-2">{value}</span>}
+                        formatter={(value) => <span className="text-slate-700 font-extrabold text-[9px] sm:text-[10px] uppercase tracking-wider px-1">{value}</span>}
                       />
                       <Line type="monotone" dataKey="LP" name="Низковязкие полимеры (PAC-LV)" stroke="#3b82f6" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
                       <Line type="monotone" dataKey="HP" name="Высоковязкие полимеры (PAC_HV)" stroke="#10b981" strokeWidth={6} dot={{ r: 6, strokeWidth: 3, fill: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
@@ -1594,7 +1594,7 @@ export default function App() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-8 p-6 bg-slate-50 rounded-3xl border border-slate-100 w-full relative overflow-hidden">
+                <div className="mt-4 sm:mt-8 p-4 sm:p-6 bg-slate-50 rounded-3xl border border-slate-100 w-full relative overflow-hidden">
                    <div className="absolute top-0 left-0 w-1 h-full bg-purple-500/20"></div>
                    <p className="text-xs text-slate-500 leading-relaxed font-medium text-center">
                     <span className="text-purple-600 font-bold uppercase mr-2 tracking-wider">Инфо:</span> 
